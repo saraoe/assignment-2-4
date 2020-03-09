@@ -33,7 +33,7 @@ This is the data:
 - Mikkel: 66 correct answers out of 132 questions
 ```{r}
 #Data
-data <- data.frame(
+data <- tibble(
   correct=c(3,2,160,66),
   questions=c(6,2,198,132),
   teacher=c("RF","KT","JS","MW"))
@@ -124,6 +124,7 @@ g_approx2 <- function(correct, questions, teacher, dens){
           geom_line(aes(grid, prior/dens),color= 'red')+
           ggtitle(teacher) +
           xlab("Knowledge of CogSci")+ ylab("posterior probability")
+  
 }
 
 #Applying manually for all teachers
@@ -134,7 +135,7 @@ g_approx(66,132, "Mikkel Wallentin", 50)
 
 #Doing it for all data
 for (i in 1:nrow(data)){
-  print(g_approx(data$correct[i], data$questions[i], data$teacher[i], dens = 100))
+  print(g_approx2(data$correct[i], data$questions[i], data$teacher[i], dens = 100))
   
 }
 
@@ -179,6 +180,7 @@ g_approx3 <- function(data, dens){
   teacher <- as.character(teacher)
   s <- c((match(max(posterior),posterior)/length(posterior)),sum(posterior[prob_grid > 0.5 ] ),teacher)
   print(s)
+  
 }}
 
 g_approx3(data,100)
@@ -248,7 +250,7 @@ g_approx5(data,100)
 
 
 6. Optional question: Can you estimate the difference between Riccardo's estimated knowledge and that of each of the other teachers? Would you deem it credible (that is, would you believe that it is actually different)?
-- You could subtract peak for the posterior distribution of each teacher. However, this would not be a credible measure. It would be better to look at intervals of the same probability, as some would have larger intervals (indicating a smaller certainty) and other would have smaller.
+- You could subtract peak for the posterior distribution of each teacher. However, this would not be a credible measure. It would be better to look at intervals of the same probability, as some would have larger intervals (indicating a smaller certainty) and other would have smaller (HDPI or PI).
 
 7. Bonus knowledge: all the stuff we have done can be implemented in a lme4-like fashion using the brms package. Here is an example.
 ```{r}
@@ -338,6 +340,14 @@ This is the new data:
 - Kristian: 8 correct answers out of 12 questions
 - Josh: 148 correct answers out of 172 questions (again, Josh never gets bored)
 - Mikkel: 34 correct answers out of 65 questions
+```{r}
+# New data
+new_data <- data.frame(
+  correct=c(9,8,148,34),
+  questions=c(10,12,172,65),
+  teacher=c("RF","KT","JS","MW"))
+```
+
 
 Guidance Tips
 
@@ -345,4 +355,135 @@ Guidance Tips
 2. Last year's results are this year's expectations.
 3. Are the parameter estimates changing? (way 1)
 4. How does the new data look in last year's predictive posterior? (way 2)
+
+
+diff in error
+diff in map
+compare HDPI
+last years posterior is this years prior 
+
+Making a function to return prior, likelihood and posterior for first data
+```{r}
+# Making a function that can return our output
+ calc_teacher <- function(teacher, correct, questions, prior, prob_grid){
+   
+   # Compute likelihood 
+   likelihood <- dbinom( correct, size = questions, prob = prob_grid )
+   
+   # Compute unstandardized posterior from likelihood and the prior
+   uns_posterior <- likelihood * prior
+   
+   # Compute standardized posterior. Now, it takes the bin size into account.
+   posterior <- uns_posterior / sum(uns_posterior)
+   
+   # Compute MAP (Maximum a posterior)
+   map <- match(max(posterior),posterior) / length(posterior)
+   
+   # posterior probability where p > 0.5
+   chance <- sum(posterior[ prob_grid > 0.5 ])
+   
+   # Teacher as factor
+   teacher <- as.factor(teacher)
+  
+   # specify output
+   return(list(teacher, map, chance, prior, likelihood, posterior))
+   
+ }
+
+#Loop through all teachers
+
+# Making empty dataframe
+teacher_info <- data.frame(teacher = factor(), MAP = numeric(), chance = numeric(), prior = numeric(), likelihood = numeric(), posterior = numeric())
+# Run loop to extract MAP and 'chance above chance' for each teacher
+for(i in 1:nrow(data)) {
+    
+    correct <- data[i,1]
+    questions <- data[i,2]
+    teacher <- data[i,3]
+    # Define grid and prior
+    prob_grid <- seq(from = 0, to = 1, length.out = 10000)
+    prior <- dnorm(prob_grid, 0.8, 0.2)
+    
+    
+    # Use my sexy little function
+    info <- calc_teacher(teacher, correct, questions, prior, prob_grid) %>% as.data.frame()
+    
+    names(info)[1] <- "teacher"
+    names(info)[2] <- "MAP"
+    names(info)[3] <- "chance"
+    names(info)[4] <- "prior"
+    names(info)[5] <- "likelihood"
+    names(info)[6] <- "posterior"
+    
+    # Combine with premade empty dataframe
+    if (nrow(teacher_info) == 0) {
+      teacher_info <- info}
+      else {
+        teacher_info <- rbind(teacher_info, info)}
+    
+    }
+```
+
+Last years posterior is this years prior
+```{r}
+#Loop through all teachers
+
+# Making empty dataframe
+new_teacher_info <- data.frame(teacher = factor(), MAP = numeric(), chance = numeric(), prior = numeric(), likelihood = numeric(), posterior = numeric())
+# Run loop to extract MAP and 'chance above chance' for each teacher
+for(i in 1:nrow(new_data)) {
+    
+    correct <- new_data[i,1]
+    questions <- new_data[i,2]
+    teacher <- new_data[i,3]
+    # Define grid and prior
+    prob_grid <- seq(from = 0, to = 1, length.out = 10000)
+    prior_sub <- teacher_info %>% filter(teacher == new_data[i,3])
+    prior <- prior_sub$posterior
+    
+    
+    # Use my sexy little function
+    info <- calc_teacher(teacher, correct, questions, prior, prob_grid) %>% as.data.frame()
+    
+    names(info)[1] <- "teacher"
+    names(info)[2] <- "MAP"
+    names(info)[3] <- "chance"
+    names(info)[4] <- "prior"
+    names(info)[5] <- "likelihood"
+    names(info)[6] <- "posterior"
+    
+    # Combine with premade empty dataframe
+    if (nrow(new_teacher_info) == 0) {
+      new_teacher_info <- info}
+      else {
+        new_teacher_info <- rbind(new_teacher_info, info)}
+    
+    }
+```
+
+Plot the old and new posterior
+```{r}
+plot_teacher <- function(prob_grid, posterior, prior, likelihood, teacher){
+  d <- data.frame(grid = prob_grid, posterior = posterior, prior = prior, likelihood = likelihood)
+  print(ggplot(d, aes(grid,posterior)) +
+          geom_point() +geom_line()+theme_classic() +
+          geom_line(aes(grid, prior),color= 'red')+
+          ggtitle(teacher) +
+          xlab("Knowledge of CogSci")+ ylab("posterior probability"))
+}
+
+for (i in 1:nrow(new_data)){
+  #Define input
+  prob_grid <- seq(from = 0, to = 1, length.out = 10000)
+  plot_sub <- new_teacher_info %>% filter(teacher == new_data[i,3])
+  posterior <- plot_sub$posterior
+  prior <- plot_sub$prior
+  likelihood <- plot_sub$likelihood
+  teacher <- new_data[i,3]
+  
+  #use function
+  plot_teacher(prob_grid,posterior,prior,likelihood,teacher)
+}
+
+```
 
