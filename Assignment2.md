@@ -1,0 +1,685 @@
+In this assignment we learn how to assess rates from a binomial distribution, using the case of assessing your teachers' knowledge of CogSci
+--------------------------------------------------------------------------------------------------------------------------------------------
+
+N.B. there is a second part at the bottom for next week.
+
+### First part
+
+You want to assess your teachers' knowledge of cognitive science. "These guys are a bunch of drama(turgist) queens, mindless philosophers, chattering communication people and Russian spies. Do they really know CogSci?", you think.
+
+To keep things simple (your teachers should not be faced with too complicated things): - You created a pool of equally challenging questions on CogSci - Each question can be answered correctly or not (we don't allow partially correct answers, to make our life simpler). - Knowledge of CogSci can be measured on a scale from 0 (negative knowledge, all answers wrong) through 0.5 (random chance) to 1 (awesome CogSci superpowers)
+
+This is the data: - Riccardo: 3 correct answers out of 6 questions - Kristian: 2 correct answers out of 2 questions (then he gets bored) - Josh: 160 correct answers out of 198 questions (Josh never gets bored) - Mikkel: 66 correct answers out of 132 questions
+
+``` r
+#Data
+data <- data.frame(
+  correct=c(3,2,160,66),
+  questions=c(6,2,198,132),
+  teacher=c("RF","KT","JS","MW"))
+```
+
+Questions:
+
+1.  What's Riccardo's estimated knowledge of CogSci? What is the probability he knows more than chance (0.5) \[try figuring this out. if you can't peek into chapters 3.1 and 3.2 and/or the slides\]?
+
+-   First implement a grid approximation (hint check paragraph 2.4.1!) with a uniform prior, calculate the posterior and plot the results
+-   Then implement a quadratic approximation (hint check paragraph 2.4.2!).
+-   N.B. for the rest of the exercise just keep using the grid approximation (we'll move to quadratic approximations in two classes)
+
+``` r
+# Grid approximation 
+#Define grid
+dens <- 20 #interval
+prob_grid <- seq(from = 0 , to = 1 , length.out = dens)
+
+#Define prior
+prior <- rep( 1 , dens ) # Flat
+
+#Test the prior (does it look crazy?)
+dens(rbinom(1e4, 6, runif(1e4, 0, 1)))
+```
+
+![](Assignment2_files/figure-markdown_github/unnamed-chunk-2-1.png)
+
+``` r
+# simulating answering 6 questions 10.000 times with a flat (uniform) prior (it is equally likely to get 0 and 1)
+# All outcomes are equally possible
+
+#Compute the likelihood at each value in grid
+likelihood <- dbinom( 3 , size = 6 , prob = prob_grid )
+
+likelihood
+```
+
+    ##  [1] 0.000000000 0.002479282 0.016708795 0.047014530 0.091825255 0.145815103
+    ##  [7] 0.201740084 0.251968499 0.289705277 0.309910234 0.309910234 0.289705277
+    ## [13] 0.251968499 0.201740084 0.145815103 0.091825255 0.047014530 0.016708795
+    ## [19] 0.002479282 0.000000000
+
+``` r
+#Compute the posterior (likelihood by prior)
+unstd.posterior <- likelihood * prior
+
+#Standardize the posterior (so it sums to 1)
+posterior <- unstd.posterior / sum(unstd.posterior)
+
+#What is RF's knowledge of CogSci
+match(max(posterior), posterior) / length(posterior)
+```
+
+    ## [1] 0.5
+
+``` r
+# Max is at 50% 
+
+# add up posterior probability where p > 0.5 
+sum( posterior[ prob_grid > 0.5 ] )
+```
+
+    ## [1] 0.5
+
+``` r
+#Draw the plot
+d <- data.frame(grid = prob_grid, posterior = posterior, prior = prior, likelihood = likelihood)
+ggplot(d, aes(grid,posterior)) +  geom_point() +geom_line()+theme_classic()+  geom_line(aes(grid, prior/dens),color= 'red')+  xlab('Knowledge of CogSci')+ ylab('posterior probability')
+```
+
+![](Assignment2_files/figure-markdown_github/unnamed-chunk-2-2.png)
+
+``` r
+# quadratic approximation
+rf_qa <- rethinking::map(alist(
+  a ~ dbinom(6,p), # binomial likelihood   
+  p ~ dunif(0,1) # uniform prior
+  ),
+  data=list(a=3)) 
+
+#Display summary
+precis(rf_qa)
+```
+
+    ##   Mean StdDev 5.5% 94.5%
+    ## p  0.5    0.2 0.17  0.83
+
+``` r
+# Quadratic approxiamation assumes that the posterior is a gaussian distribution - in this case with a mean of 0.5 and SD of 0.2
+```
+
+1.  Estimate all the teachers' knowledge of CogSci. Who's best? Use grid approximation. Comment on the posteriors of Riccardo and Mikkel. 2a. Produce plots of the prior, and posterior for each teacher.
+
+``` r
+g_approx2 <- function(correct, questions, teacher, dens){
+  #Define grid
+  prob_grid <- seq(from = 0 , to = 1 , length.out = dens)
+  
+  #Define prior
+  prior <- rep(1, dens) #Flat
+  
+  #Likelihood
+  likelihood <- dbinom(correct, size = questions, prob = prob_grid)
+  
+  #posterior
+  unstd.posterior <- likelihood * prior
+  posterior <- unstd.posterior / sum(unstd.posterior)
+  
+  #What is teacher's knowledge of CogSci
+  teacher <- as.character(teacher)
+  s <- c(match(max(posterior), posterior) / length(posterior), sum( posterior[ prob_grid > 0.5 ] ), teacher)
+  print(s)
+  
+  #Plot
+  d <- data.frame(grid = prob_grid, posterior = posterior, prior = prior, likelihood = likelihood)
+  ggplot(d, aes(grid,posterior)) +
+          geom_point() +geom_line()+theme_classic() +
+          geom_line(aes(grid, prior/dens),color= 'red')+
+          ggtitle(teacher) +
+          xlab("Knowledge of CogSci")+ ylab("posterior probability")
+  
+}
+
+#Applying manually for all teachers
+g_approx2(3, 6, "Riccardo Fusaroli", 20)
+```
+
+    ## [1] "0.5"               "0.5"               "Riccardo Fusaroli"
+
+![](Assignment2_files/figure-markdown_github/unnamed-chunk-3-1.png)
+
+``` r
+g_approx2(2,2, "Kristian Tylén", 20)
+```
+
+    ## [1] "1"                 "0.884615384615385" "Kristian Tylén"
+
+![](Assignment2_files/figure-markdown_github/unnamed-chunk-3-2.png)
+
+``` r
+g_approx2(160,198, "Joshua Skewes", 50)
+```
+
+    ## [1] "0.82"          "1"             "Joshua Skewes"
+
+![](Assignment2_files/figure-markdown_github/unnamed-chunk-3-3.png)
+
+``` r
+g_approx2(66,132, "Mikkel Wallentin", 50)
+```
+
+    ## [1] "0.5"              "0.5"              "Mikkel Wallentin"
+
+![](Assignment2_files/figure-markdown_github/unnamed-chunk-3-4.png)
+
+``` r
+#Doing it for all data
+for (i in 1:nrow(data)){
+  print(g_approx2(data$correct[i], data$questions[i], data$teacher[i], dens = 100))
+  
+}
+```
+
+    ## [1] "0.5" "0.5" "RF"
+
+![](Assignment2_files/figure-markdown_github/unnamed-chunk-3-5.png)
+
+    ## [1] "1"                 "0.876884422110553" "KT"
+
+![](Assignment2_files/figure-markdown_github/unnamed-chunk-3-6.png)
+
+    ## [1] "0.81" "1"    "JS"
+
+![](Assignment2_files/figure-markdown_github/unnamed-chunk-3-7.png)
+
+    ## [1] "0.5" "0.5" "MW"
+
+![](Assignment2_files/figure-markdown_github/unnamed-chunk-3-8.png)
+
+1.  Change the prior. Given your teachers have all CogSci jobs, you should start with a higher appreciation of their knowledge: the prior is a normal distribution with a mean of 0.8 and a standard deviation of 0.2. Do the results change (and if so how)? 3a. Produce plots of the prior and posterior for each teacher.
+
+``` r
+#changing prior in function
+g_approx3 <- function(data, dens){
+  #Loop through data
+  for(i in 1:nrow(data))
+    {
+    #Define variables
+    correct <- data[i,1] 
+    questions <- data[i,2]
+    teacher <- data[i,3]
+    
+  prob_grid <- seq(from = 0 , to = 1 , length.out = dens) #Grid with dens specified in function
+  
+  #Define prior
+  prior <- dnorm(prob_grid, 0.8, 0.2) # normal distribution with mean 0.8 and SD 0.2
+  
+  #Likelihood
+  likelihood <- dbinom(correct, size = questions, prob = prob_grid)
+  
+  #Posterior
+  unstd.posterior <- likelihood * prior
+  posterior <- unstd.posterior / sum(unstd.posterior)
+  
+  #Plot
+  d <- data.frame(grid = prob_grid, posterior = posterior, prior = prior, likelihood = likelihood)
+  print(ggplot(d, aes(grid,posterior)) +
+          geom_point() +geom_line()+theme_classic() +
+          geom_line(aes(grid, prior/dens),color= 'red')+
+          ggtitle(teacher) +
+          xlab("Knowledge of CogSci")+ ylab("posterior probability"))
+  
+  #Performance
+  teacher <- as.character(teacher)
+  s <- c((match(max(posterior),posterior)/length(posterior)),sum(posterior[prob_grid > 0.5 ] ),teacher)
+  print(s)
+  
+}}
+
+g_approx3(data,dens = 100)
+```
+
+![](Assignment2_files/figure-markdown_github/unnamed-chunk-4-1.png)
+
+    ## [1] "0.65"              "0.841833150977187" "RF"
+
+![](Assignment2_files/figure-markdown_github/unnamed-chunk-4-2.png)
+
+    ## [1] "0.89"              "0.976080923475512" "KT"
+
+![](Assignment2_files/figure-markdown_github/unnamed-chunk-4-3.png)
+
+    ## [1] "0.81" "1"    "JS"
+
+![](Assignment2_files/figure-markdown_github/unnamed-chunk-4-4.png)
+
+    ## [1] "0.52"             "0.62434566100276" "MW"
+
+1.  You go back to your teachers and collect more data (multiply the previous numbers by 100). Calculate their knowledge with both a uniform prior and a normal prior with a mean of 0.8 and a standard deviation of 0.2. Do you still see a difference between the results? Why?
+
+``` r
+#New data
+dataBIG <- data %>% 
+  mutate(
+    correct = (correct * 100),
+    questions = (questions * 100),
+    teacher = teacher
+  ) 
+
+#grid approximation with uniform prior
+for (i in 1:nrow(dataBIG)){
+  print(g_approx2(dataBIG$correct[i], dataBIG$questions[i], dataBIG$teacher[i], dens = 1000))
+  
+}
+```
+
+    ## [1] "0.5" "0.5" "RF"
+
+![](Assignment2_files/figure-markdown_github/unnamed-chunk-5-1.png)
+
+    ## [1] "1"  "1"  "KT"
+
+![](Assignment2_files/figure-markdown_github/unnamed-chunk-5-2.png)
+
+    ## [1] "0.808" "1"     "JS"
+
+![](Assignment2_files/figure-markdown_github/unnamed-chunk-5-3.png)
+
+    ## [1] "0.5" "0.5" "MW"
+
+![](Assignment2_files/figure-markdown_github/unnamed-chunk-5-4.png)
+
+``` r
+# with gaussian prior
+g_approx3(dataBIG,1000)
+```
+
+![](Assignment2_files/figure-markdown_github/unnamed-chunk-5-5.png)
+
+    ## [1] "0.504"             "0.560408921107491" "RF"
+
+![](Assignment2_files/figure-markdown_github/unnamed-chunk-5-6.png)
+
+    ## [1] "1"  "1"  "KT"
+
+![](Assignment2_files/figure-markdown_github/unnamed-chunk-5-7.png)
+
+    ## [1] "0.808" "1"     "JS"
+
+![](Assignment2_files/figure-markdown_github/unnamed-chunk-5-8.png)
+
+    ## [1] "0.501"            "0.51304350921187" "MW"
+
+1.  Imagine you're a skeptic and think your teachers do not know anything about CogSci, given the content of their classes. How would you operationalize that belief?
+
+``` r
+#changing prior in function
+g_approx5 <- function(data, dens){
+  #Loop through data
+  for(i in 1:nrow(data))
+    {
+    #Define variables
+    correct <- data[i,1] 
+    questions <- data[i,2]
+    teacher <- data[i,3]
+    
+  prob_grid <- seq(from = 0 , to = 1 , length.out = dens) #Grid with dens specified in function
+  
+  #Define prior
+  prior <- dnorm(prob_grid, 0.5, 0.05) # normal distribution with mean 0.5 (change) and SD 0.05
+  
+  #Likelihood
+  likelihood <- dbinom(correct, size = questions, prob = prob_grid)
+  
+  #Posterior
+  unstd.posterior <- likelihood * prior
+  posterior <- unstd.posterior / sum(unstd.posterior)
+  
+  #Plot
+  d <- data.frame(grid = prob_grid, posterior = posterior, prior = prior, likelihood = likelihood)
+  print(ggplot(d, aes(grid,posterior)) +
+          geom_point() +geom_line()+theme_classic() +
+          geom_line(aes(grid, prior/dens),color= 'red')+
+          ggtitle(teacher) +
+          xlab("Knowledge of CogSci")+ ylab("posterior probability"))
+  
+  #Performance
+  teacher <- as.character(teacher)
+  s <- c((match(max(posterior),posterior)/length(posterior)),sum(posterior[prob_grid > 0.5 ] ),teacher)
+  print(s)
+}}
+
+g_approx5(data,100)
+```
+
+![](Assignment2_files/figure-markdown_github/unnamed-chunk-6-1.png)
+
+    ## [1] "0.5" "0.5" "RF"
+
+![](Assignment2_files/figure-markdown_github/unnamed-chunk-6-2.png)
+
+    ## [1] "0.51"             "0.57913329112768" "KT"
+
+![](Assignment2_files/figure-markdown_github/unnamed-chunk-6-3.png)
+
+    ## [1] "0.72"              "0.999999999999882" "JS"
+
+![](Assignment2_files/figure-markdown_github/unnamed-chunk-6-4.png)
+
+    ## [1] "0.5" "0.5" "MW"
+
+1.  Optional question: Can you estimate the difference between Riccardo's estimated knowledge and that of each of the other teachers? Would you deem it credible (that is, would you believe that it is actually different)?
+
+-   You could subtract peak for the posterior distribution of each teacher. However, this would not be a credible measure. It would be better to look at intervals of the same probability, as some would have larger intervals (indicating a smaller certainty) and other would have smaller (HDPI or PI).
+
+1.  Bonus knowledge: all the stuff we have done can be implemented in a lme4-like fashion using the brms package. Here is an example.
+
+``` r
+# p_load(brms)
+# 
+# d <- data.frame(
+#   Correct=c(3,2,160,66),
+#   Questions=c(6,2,198,132),
+#   Teacher=c("RF","KT","JS","MW"))
+# 
+# # Model sampling only from the prior (for checking the predictions your prior leads to)
+# FlatModel_priorCheck <- brm(Correct|trials(Questions) ~ 1, 
+#                  data = subset(d, Teacher=="RF"),
+#                  prior = prior("uniform(0,1)", class = "Intercept"),
+#                  family = binomial,
+#                  sample_prior = "only") # here we tell the model to ignore the data
+# 
+# # Plotting the predictions of the model (prior only) against the actual data
+# pp_check(FlatModel_priorCheck, nsamples = 100)
+# 
+# # Model sampling by combining prior and likelihood
+# FlatModel <- brm(Correct|trials(Questions) ~ 1, 
+#                  data = subset(d, Teacher=="RF"),
+#                  prior = prior("uniform(0,1)", class = "Intercept"),
+#                  family = binomial,
+#                  sample_prior = T)
+# # Plotting the predictions of the model (prior + likelihood) against the actual data
+# pp_check(FlatModel, nsamples = 100)
+# 
+# # plotting the posteriors and the sampling process
+# plot(FlatModel)
+# 
+# 
+# PositiveModel_priorCheck <- brm(Correct|trials(Questions) ~ 1,
+#                      data = subset(d, Teacher=="RF"),
+#                      prior = prior("normal(0.8,0.2)", 
+#                                    class = "Intercept"),
+#                      family=binomial,
+#                      sample_prior = "only")
+# pp_check(PositiveModel_priorCheck, nsamples = 100)
+# 
+# PositiveModel <- brm(Correct|trials(Questions) ~ 1,
+#                      data = subset(d, Teacher=="RF"),
+#                      prior = prior("normal(0.8,0.2)", 
+#                                    class = "Intercept"),
+#                      family=binomial,
+#                      sample_prior = T)
+# pp_check(PositiveModel, nsamples = 100)
+# plot(PositiveModel)
+# 
+# SkepticalModel_priorCheck <- brm(Correct|trials(Questions) ~ 1, 
+#                       data = subset(d, Teacher=="RF"),
+#                       prior=prior("normal(0.5,0.01)", class = "Intercept"),
+#                       family=binomial,
+#                       sample_prior = "only")
+# pp_check(SkepticalModel_priorCheck, nsamples = 100)
+# 
+# SkepticalModel <- brm(Correct|trials(Questions) ~ 1, 
+#                       data = subset(d, Teacher=="RF"),
+#                       prior = prior("normal(0.5,0.01)", class = "Intercept"),
+#                       family = binomial,
+#                       sample_prior = T)
+# pp_check(SkepticalModel, nsamples = 100)
+# plot(SkepticalModel)
+```
+
+If you dare, try to tweak the data and model to test two hypotheses: - Is Kristian different from Josh? - Is Josh different from chance?
+
+### Second part: Focusing on predictions
+
+Last year you assessed the teachers (darned time runs quick!). Now you want to re-test them and assess whether your models are producing reliable predictions. In Methods 3 we learned how to do machine-learning style assessment of predictions (e.g. rmse on testing datasets). Bayesian stats makes things a bit more complicated. So we'll try out how that works. N.B. You can choose which prior to use for the analysis of last year's data.
+
+Questions to be answered (but see guidance below): 1- Write a paragraph discussing how assessment of prediction performance is different in Bayesian vs. frequentist models 2- Provide at least one plot and one written line discussing prediction errors for each of the teachers.
+
+This is the old data: - Riccardo: 3 correct answers out of 6 questions - Kristian: 2 correct answers out of 2 questions (then he gets bored) - Josh: 160 correct answers out of 198 questions (Josh never gets bored) - Mikkel: 66 correct answers out of 132 questions
+
+This is the new data: - Riccardo: 9 correct answers out of 10 questions (then he freaks out about teaching preparation and leaves) - Kristian: 8 correct answers out of 12 questions - Josh: 148 correct answers out of 172 questions (again, Josh never gets bored) - Mikkel: 34 correct answers out of 65 questions
+
+``` r
+# New data
+new_data <- data.frame(
+  correct=c(9,8,148,34),
+  questions=c(10,12,172,65),
+  teacher=c("RF","KT","JS","MW"))
+```
+
+Guidance Tips
+
+1.  There are at least two ways of assessing predictions.
+2.  Last year's results are this year's expectations.
+3.  Are the parameter estimates changing? (way 1)
+4.  How does the new data look in last year's predictive posterior? (way 2)
+
+Making a function to return prior, likelihood and posterior for first data
+
+``` r
+# Making a function that can return our output
+ calc_teacher <- function(teacher, correct, questions, prior, prob_grid){
+   
+   # Compute likelihood 
+   likelihood <- dbinom( correct, size = questions, prob = prob_grid )
+   
+   # Compute unstandardized posterior from likelihood and the prior
+   uns_posterior <- likelihood * prior
+   
+   # Compute standardized posterior. Now, it takes the bin size into account.
+   posterior <- uns_posterior / sum(uns_posterior)
+   
+   # Compute MAP (Maximum a posterior)
+   map <- match(max(posterior),posterior) / length(posterior)
+   
+   # posterior probability where p > 0.5
+   chance <- sum(posterior[ prob_grid > 0.5 ])
+   
+   # Teacher as factor
+   teacher <- as.factor(teacher)
+  
+   # specify output
+   return(list(teacher, map, chance, prior, likelihood, posterior))
+   
+ }
+
+#Loop through all teachers
+
+# Making empty dataframe
+teacher_info <- data.frame(teacher = factor(), MAP = numeric(), chance = numeric(), prior = numeric(), likelihood = numeric(), posterior = numeric())
+# Run loop to extract MAP and 'chance above chance' for each teacher
+for(i in 1:nrow(data)) {
+    
+    correct <- data[i,1]
+    questions <- data[i,2]
+    teacher <- data[i,3]
+    # Define grid and prior
+    prob_grid <- seq(from = 0, to = 1, length.out = 10000)
+    prior <- dnorm(prob_grid, 0.8, 0.2)
+    
+    
+    # Use my sexy little function
+    info <- calc_teacher(teacher, correct, questions, prior, prob_grid) %>% as.data.frame()
+    
+    names(info)[1] <- "teacher"
+    names(info)[2] <- "MAP"
+    names(info)[3] <- "chance"
+    names(info)[4] <- "prior"
+    names(info)[5] <- "likelihood"
+    names(info)[6] <- "posterior"
+    
+    # Combine with premade empty dataframe
+    if (nrow(teacher_info) == 0) {
+      teacher_info <- info}
+      else {
+        teacher_info <- rbind(teacher_info, info)}
+    
+    }
+```
+
+Last years posterior is this years prior
+
+``` r
+#Loop through all teachers
+
+# Making empty dataframe
+new_teacher_info <- data.frame(teacher = factor(), MAP = numeric(), chance = numeric(), prior = numeric(), likelihood = numeric(), posterior = numeric())
+# Run loop to extract MAP and 'chance above chance' for each teacher
+for(i in 1:nrow(new_data)) {
+    
+    correct <- new_data[i,1]
+    questions <- new_data[i,2]
+    teacher <- new_data[i,3]
+    # Define grid and prior
+    prob_grid <- seq(from = 0, to = 1, length.out = 10000)
+    prior_sub <- teacher_info %>% filter(teacher == new_data[i,3])
+    prior <- prior_sub$posterior
+    
+    
+    # Use my sexy little function
+    info <- calc_teacher(teacher, correct, questions, prior, prob_grid) %>% as.data.frame()
+    
+    names(info)[1] <- "teacher"
+    names(info)[2] <- "MAP"
+    names(info)[3] <- "chance"
+    names(info)[4] <- "prior"
+    names(info)[5] <- "likelihood"
+    names(info)[6] <- "posterior"
+    
+    # Combine with premade empty dataframe
+    if (nrow(new_teacher_info) == 0) {
+      new_teacher_info <- info}
+      else {
+        new_teacher_info <- rbind(new_teacher_info, info)}
+    
+    }
+```
+
+Plot the old and new posterior - and the difference between the two
+
+``` r
+plot_teacher <- function(prob_grid, posterior, prior, likelihood, teacher){
+  d <- data.frame(grid = prob_grid, posterior = posterior, prior = prior, likelihood = likelihood)
+  print(ggplot(d, aes(grid,posterior)) +
+          geom_point() +geom_line()+theme_classic() +
+          geom_line(aes(grid, prior),color= 'red')+
+          geom_line(aes(grid, abs(posterior - prior)), color = 'green')+
+          ggtitle(teacher) +
+          xlab("Knowledge of CogSci")+ ylab("posterior probability"))
+}
+
+for (i in 1:nrow(new_data)){
+  #Define input
+  prob_grid <- seq(from = 0, to = 1, length.out = 10000)
+  plot_sub <- new_teacher_info %>% filter(teacher == new_data[i,3])
+  posterior <- plot_sub$posterior
+  prior <- plot_sub$prior
+  likelihood <- plot_sub$likelihood
+  teacher <- new_data[i,3]
+  
+  #use function
+  plot_teacher(prob_grid,posterior,prior,likelihood,teacher)
+}
+```
+
+![](Assignment2_files/figure-markdown_github/unnamed-chunk-11-1.png)![](Assignment2_files/figure-markdown_github/unnamed-chunk-11-2.png)![](Assignment2_files/figure-markdown_github/unnamed-chunk-11-3.png)![](Assignment2_files/figure-markdown_github/unnamed-chunk-11-4.png)
+
+Asses prediction in other ways
+
+``` r
+# Difference in MAP
+MAP_diff <-new_teacher_info %>% group_by(teacher) %>% 
+  summarise(
+    MAP_posterior = which.max(posterior),
+    MAP_prior = which.max(prior),
+    MAP_diff = abs(MAP_posterior - MAP_prior)
+  )
+
+formattable(MAP_diff, align = c("l", rep("r", NCOL(MAP_diff) - 1)))
+```
+
+<table class="table table-condensed">
+<thead>
+<tr>
+<th style="text-align:left;">
+teacher
+</th>
+<th style="text-align:right;">
+MAP\_posterior
+</th>
+<th style="text-align:right;">
+MAP\_prior
+</th>
+<th style="text-align:right;">
+MAP\_diff
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left;">
+JS
+</td>
+<td style="text-align:right;">
+8321
+</td>
+<td style="text-align:right;">
+8079
+</td>
+<td style="text-align:right;">
+242
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+KT
+</td>
+<td style="text-align:right;">
+7364
+</td>
+<td style="text-align:right;">
+8899
+</td>
+<td style="text-align:right;">
+1535
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+MW
+</td>
+<td style="text-align:right;">
+5166
+</td>
+<td style="text-align:right;">
+5136
+</td>
+<td style="text-align:right;">
+30
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+RF
+</td>
+<td style="text-align:right;">
+7611
+</td>
+<td style="text-align:right;">
+6464
+</td>
+<td style="text-align:right;">
+1147
+</td>
+</tr>
+</tbody>
+</table>

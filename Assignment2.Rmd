@@ -10,7 +10,7 @@ output:
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 library(pacman)
-p_load(rethinking, tidyverse)
+p_load(rethinking, tidyverse, data.table,formattable, dplyr)
 ```
 
 ## In this assignment we learn how to assess rates from a binomial distribution, using the case of assessing your teachers' knowledge of CogSci
@@ -33,7 +33,7 @@ This is the data:
 - Mikkel: 66 correct answers out of 132 questions
 ```{r}
 #Data
-data <- tibble(
+data <- data.frame(
   correct=c(3,2,160,66),
   questions=c(6,2,198,132),
   teacher=c("RF","KT","JS","MW"))
@@ -128,10 +128,10 @@ g_approx2 <- function(correct, questions, teacher, dens){
 }
 
 #Applying manually for all teachers
-g_approx(3, 6, "Riccardo Fusaroli", 20)
-g_approx(2,2, "Kristian Tylén", 20)
-g_approx(160,198, "Joshua Skewes", 50)
-g_approx(66,132, "Mikkel Wallentin", 50)
+g_approx2(3, 6, "Riccardo Fusaroli", 20)
+g_approx2(2,2, "Kristian Tylén", 20)
+g_approx2(160,198, "Joshua Skewes", 50)
+g_approx2(66,132, "Mikkel Wallentin", 50)
 
 #Doing it for all data
 for (i in 1:nrow(data)){
@@ -183,7 +183,7 @@ g_approx3 <- function(data, dens){
   
 }}
 
-g_approx3(data,100)
+g_approx3(data,dens = 100)
 ```
 
 
@@ -254,7 +254,7 @@ g_approx5(data,100)
 
 7. Bonus knowledge: all the stuff we have done can be implemented in a lme4-like fashion using the brms package. Here is an example.
 ```{r}
-library(brms)
+p_load(brms)
 
 d <- data.frame(
   Correct=c(3,2,160,66),
@@ -262,7 +262,7 @@ d <- data.frame(
   Teacher=c("RF","KT","JS","MW"))
 
 # Model sampling only from the prior (for checking the predictions your prior leads to)
-FlatModel_priorCheck <- brm(Correct|trials(Questions) ~ 1, 
+FlatModel_priorCheck <- brm(Correct|trials(Questions) ~ 1,
                  data = subset(d, Teacher=="RF"),
                  prior = prior("uniform(0,1)", class = "Intercept"),
                  family = binomial,
@@ -272,7 +272,7 @@ FlatModel_priorCheck <- brm(Correct|trials(Questions) ~ 1,
 pp_check(FlatModel_priorCheck, nsamples = 100)
 
 # Model sampling by combining prior and likelihood
-FlatModel <- brm(Correct|trials(Questions) ~ 1, 
+FlatModel <- brm(Correct|trials(Questions) ~ 1,
                  data = subset(d, Teacher=="RF"),
                  prior = prior("uniform(0,1)", class = "Intercept"),
                  family = binomial,
@@ -286,7 +286,7 @@ plot(FlatModel)
 
 PositiveModel_priorCheck <- brm(Correct|trials(Questions) ~ 1,
                      data = subset(d, Teacher=="RF"),
-                     prior = prior("normal(0.8,0.2)", 
+                     prior = prior("normal(0.8,0.2)",
                                    class = "Intercept"),
                      family=binomial,
                      sample_prior = "only")
@@ -294,21 +294,21 @@ pp_check(PositiveModel_priorCheck, nsamples = 100)
 
 PositiveModel <- brm(Correct|trials(Questions) ~ 1,
                      data = subset(d, Teacher=="RF"),
-                     prior = prior("normal(0.8,0.2)", 
+                     prior = prior("normal(0.8,0.2)",
                                    class = "Intercept"),
                      family=binomial,
                      sample_prior = T)
 pp_check(PositiveModel, nsamples = 100)
 plot(PositiveModel)
 
-SkepticalModel_priorCheck <- brm(Correct|trials(Questions) ~ 1, 
+SkepticalModel_priorCheck <- brm(Correct|trials(Questions) ~ 1,
                       data = subset(d, Teacher=="RF"),
                       prior=prior("normal(0.5,0.01)", class = "Intercept"),
                       family=binomial,
                       sample_prior = "only")
 pp_check(SkepticalModel_priorCheck, nsamples = 100)
 
-SkepticalModel <- brm(Correct|trials(Questions) ~ 1, 
+SkepticalModel <- brm(Correct|trials(Questions) ~ 1,
                       data = subset(d, Teacher=="RF"),
                       prior = prior("normal(0.5,0.01)", class = "Intercept"),
                       family = binomial,
@@ -355,12 +355,6 @@ Guidance Tips
 2. Last year's results are this year's expectations.
 3. Are the parameter estimates changing? (way 1)
 4. How does the new data look in last year's predictive posterior? (way 2)
-
-
-diff in error
-diff in map
-compare HDPI
-last years posterior is this years prior 
 
 Making a function to return prior, likelihood and posterior for first data
 ```{r}
@@ -461,13 +455,14 @@ for(i in 1:nrow(new_data)) {
     }
 ```
 
-Plot the old and new posterior
+Plot the old and new posterior - and the difference between the two
 ```{r}
 plot_teacher <- function(prob_grid, posterior, prior, likelihood, teacher){
   d <- data.frame(grid = prob_grid, posterior = posterior, prior = prior, likelihood = likelihood)
   print(ggplot(d, aes(grid,posterior)) +
           geom_point() +geom_line()+theme_classic() +
           geom_line(aes(grid, prior),color= 'red')+
+          geom_line(aes(grid, abs(posterior - prior)), color = 'green')+
           ggtitle(teacher) +
           xlab("Knowledge of CogSci")+ ylab("posterior probability"))
 }
@@ -484,6 +479,20 @@ for (i in 1:nrow(new_data)){
   #use function
   plot_teacher(prob_grid,posterior,prior,likelihood,teacher)
 }
+
+```
+
+Asses prediction in other ways
+```{r}
+# Difference in MAP
+MAP_diff <-new_teacher_info %>% group_by(teacher) %>% 
+  summarise(
+    MAP_posterior = which.max(posterior),
+    MAP_prior = which.max(prior),
+    MAP_diff = abs(MAP_posterior - MAP_prior)
+  )
+
+formattable(MAP_diff, align = c("l", rep("r", NCOL(MAP_diff) - 1)))
 
 ```
 
