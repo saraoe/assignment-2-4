@@ -82,7 +82,7 @@ sum( posterior[ prob_grid > 0.5 ] )
 ``` r
 #Draw the plot
 d <- data.frame(grid = prob_grid, posterior = posterior, prior = prior, likelihood = likelihood)
-ggplot(d, aes(grid,posterior)) +  geom_point() +geom_line()+theme_classic()+  geom_line(aes(grid, prior/dens),color= 'red')+  xlab('Knowledge of CogSci')+ ylab('posterior probability')
+ggplot(d, aes(grid,posterior)) +  geom_point() +geom_line()+theme_classic()+  geom_line(aes(grid, prior/dens),color= 'red')+  xlab('Knowledge of CogSci')+ ylab('Density')
 ```
 
 ![](Assignment2_files/figure-markdown_github/unnamed-chunk-2-2.png)
@@ -107,6 +107,99 @@ precis(rf_qa)
 ```
 
 1.  Estimate all the teachers' knowledge of CogSci. Who's best? Use grid approximation. Comment on the posteriors of Riccardo and Mikkel. 2a. Produce plots of the prior, and posterior for each teacher.
+
+Making a function to return prior, likelihood and posterior
+
+``` r
+# Making a function that can return our output
+ calc_teacher <- function(teacher, correct, questions, prior, prob_grid){
+   
+   # Compute likelihood 
+   likelihood <- dbinom( correct, size = questions, prob = prob_grid )
+   
+   # Compute unstandardized posterior from likelihood and the prior
+   uns_posterior <- likelihood * prior
+   
+   # Compute standardized posterior. 
+   posterior <- uns_posterior / sum(uns_posterior)
+   
+   # Compute MAP (Maximum a posterior)
+   map <- match(max(posterior),posterior) / length(posterior)
+   
+   # posterior probability where p > 0.5
+   chance <- sum(posterior[ prob_grid > 0.5 ])
+   
+   # Teacher as factor
+   teacher <- as.factor(teacher)
+  
+   # specify output
+   return(list(teacher, map, chance, prior, likelihood, posterior))
+   
+ }
+
+#Loop through all teachers
+
+# Making empty dataframe
+teacher_info <- data.frame(teacher = factor(), MAP = numeric(), chance = numeric(), prior = numeric(), likelihood = numeric(), posterior = numeric())
+# Run loop to extract MAP and 'chance above chance' for each teacher
+for(i in 1:nrow(data)) {
+    
+    correct <- data[i,1]
+    questions <- data[i,2]
+    teacher <- data[i,3]
+    # Define grid and prior
+    prob_grid <- seq(from = 0, to = 1, length.out = 10000)
+    prior <- rep(1, 10000)
+    
+    
+    # Use my sexy little function
+    info <- calc_teacher(teacher, correct, questions, prior, prob_grid) %>% as.data.frame()
+    
+    names(info)[1] <- "teacher"
+    names(info)[2] <- "MAP"
+    names(info)[3] <- "chance"
+    names(info)[4] <- "prior"
+    names(info)[5] <- "likelihood"
+    names(info)[6] <- "posterior"
+    
+    # Combine with premade empty dataframe
+    if (nrow(teacher_info) == 0) {
+      teacher_info <- info}
+      else {
+        teacher_info <- rbind(teacher_info, info)}
+    
+}
+
+#Prob grid
+prob_grid <- seq(from = 0, to = 1, length.out = 10000)
+
+#Posterior for each teacher
+JS_pos <- teacher_info$posterior[teacher_info$teacher == 'JS']
+KT_pos <- teacher_info$posterior[teacher_info$teacher == 'KT']
+MW_pos <- teacher_info$posterior[teacher_info$teacher == 'MW']
+RF_pos <- teacher_info$posterior[teacher_info$teacher == 'RF']
+
+#Sample from all
+sam_JS <- sample(size = 10000, x = prob_grid, prob = JS_pos, replace = T)
+sam_KT <- sample(size = 10000, x = prob_grid, prob = KT_pos, replace = T)
+sam_MW <- sample(size = 10000, x = prob_grid, prob = MW_pos, replace = T)
+sam_RF <- sample(size = 10000, x = prob_grid, prob = RF_pos, replace = T)
+
+#Difference between teachers
+# JS and KT
+sum(sam_JS > sam_KT)/10000*100
+```
+
+    ## [1] 52.75
+
+``` r
+# RF and MW
+sum(sam_RF > sam_MW)/10000*100
+```
+
+    ## [1] 50.25
+
+Function for plots
 
 ``` r
 g_approx2 <- function(correct, questions, teacher, dens){
@@ -134,7 +227,7 @@ g_approx2 <- function(correct, questions, teacher, dens){
           geom_point() +geom_line()+theme_classic() +
           geom_line(aes(grid, prior/dens),color= 'red')+
           ggtitle(teacher) +
-          xlab("Knowledge of CogSci")+ ylab("posterior probability")
+          xlab("Knowledge of CogSci")+ ylab("Density")
   
 }
 
@@ -144,7 +237,7 @@ g_approx2(3, 6, "Riccardo Fusaroli", 20)
 
     ## [1] "0.5"               "0.5"               "Riccardo Fusaroli"
 
-![](Assignment2_files/figure-markdown_github/unnamed-chunk-3-1.png)
+![](Assignment2_files/figure-markdown_github/unnamed-chunk-4-1.png)
 
 ``` r
 g_approx2(2,2, "Kristian Tylén", 20)
@@ -152,7 +245,7 @@ g_approx2(2,2, "Kristian Tylén", 20)
 
     ## [1] "1"                 "0.884615384615385" "Kristian Tylén"
 
-![](Assignment2_files/figure-markdown_github/unnamed-chunk-3-2.png)
+![](Assignment2_files/figure-markdown_github/unnamed-chunk-4-2.png)
 
 ``` r
 g_approx2(160,198, "Joshua Skewes", 50)
@@ -160,7 +253,7 @@ g_approx2(160,198, "Joshua Skewes", 50)
 
     ## [1] "0.82"          "1"             "Joshua Skewes"
 
-![](Assignment2_files/figure-markdown_github/unnamed-chunk-3-3.png)
+![](Assignment2_files/figure-markdown_github/unnamed-chunk-4-3.png)
 
 ``` r
 g_approx2(66,132, "Mikkel Wallentin", 50)
@@ -168,31 +261,31 @@ g_approx2(66,132, "Mikkel Wallentin", 50)
 
     ## [1] "0.5"              "0.5"              "Mikkel Wallentin"
 
-![](Assignment2_files/figure-markdown_github/unnamed-chunk-3-4.png)
+![](Assignment2_files/figure-markdown_github/unnamed-chunk-4-4.png)
 
 ``` r
 #Doing it for all data
 for (i in 1:nrow(data)){
-  print(g_approx2(data$correct[i], data$questions[i], data$teacher[i], dens = 100))
+  print(g_approx2(data$correct[i], data$questions[i], data$teacher[i], dens = 10000))
   
 }
 ```
 
     ## [1] "0.5" "0.5" "RF"
 
-![](Assignment2_files/figure-markdown_github/unnamed-chunk-3-5.png)
+![](Assignment2_files/figure-markdown_github/unnamed-chunk-4-5.png)
 
-    ## [1] "1"                 "0.876884422110553" "KT"
+    ## [1] "1"                 "0.875018750937547" "KT"
 
-![](Assignment2_files/figure-markdown_github/unnamed-chunk-3-6.png)
+![](Assignment2_files/figure-markdown_github/unnamed-chunk-4-6.png)
 
-    ## [1] "0.81" "1"    "JS"
+    ## [1] "0.8081" "1"      "JS"
 
-![](Assignment2_files/figure-markdown_github/unnamed-chunk-3-7.png)
+![](Assignment2_files/figure-markdown_github/unnamed-chunk-4-7.png)
 
     ## [1] "0.5" "0.5" "MW"
 
-![](Assignment2_files/figure-markdown_github/unnamed-chunk-3-8.png)
+![](Assignment2_files/figure-markdown_github/unnamed-chunk-4-8.png)
 
 1.  Change the prior. Given your teachers have all CogSci jobs, you should start with a higher appreciation of their knowledge: the prior is a normal distribution with a mean of 0.8 and a standard deviation of 0.2. Do the results change (and if so how)? 3a. Produce plots of the prior and posterior for each teacher.
 
@@ -225,7 +318,7 @@ g_approx3 <- function(data, dens){
           geom_point() +geom_line()+theme_classic() +
           geom_line(aes(grid, prior/dens),color= 'red')+
           ggtitle(teacher) +
-          xlab("Knowledge of CogSci")+ ylab("posterior probability"))
+          xlab("Knowledge of CogSci")+ ylab("Density"))
   
   #Performance
   teacher <- as.character(teacher)
@@ -237,19 +330,19 @@ g_approx3 <- function(data, dens){
 g_approx3(data,dens = 100)
 ```
 
-![](Assignment2_files/figure-markdown_github/unnamed-chunk-4-1.png)
+![](Assignment2_files/figure-markdown_github/unnamed-chunk-5-1.png)
 
     ## [1] "0.65"              "0.841833150977187" "RF"
 
-![](Assignment2_files/figure-markdown_github/unnamed-chunk-4-2.png)
+![](Assignment2_files/figure-markdown_github/unnamed-chunk-5-2.png)
 
     ## [1] "0.89"              "0.976080923475512" "KT"
 
-![](Assignment2_files/figure-markdown_github/unnamed-chunk-4-3.png)
+![](Assignment2_files/figure-markdown_github/unnamed-chunk-5-3.png)
 
     ## [1] "0.81" "1"    "JS"
 
-![](Assignment2_files/figure-markdown_github/unnamed-chunk-4-4.png)
+![](Assignment2_files/figure-markdown_github/unnamed-chunk-5-4.png)
 
     ## [1] "0.52"             "0.62434566100276" "MW"
 
@@ -273,38 +366,38 @@ for (i in 1:nrow(dataBIG)){
 
     ## [1] "0.5" "0.5" "RF"
 
-![](Assignment2_files/figure-markdown_github/unnamed-chunk-5-1.png)
+![](Assignment2_files/figure-markdown_github/unnamed-chunk-6-1.png)
 
     ## [1] "1"  "1"  "KT"
 
-![](Assignment2_files/figure-markdown_github/unnamed-chunk-5-2.png)
+![](Assignment2_files/figure-markdown_github/unnamed-chunk-6-2.png)
 
     ## [1] "0.808" "1"     "JS"
 
-![](Assignment2_files/figure-markdown_github/unnamed-chunk-5-3.png)
+![](Assignment2_files/figure-markdown_github/unnamed-chunk-6-3.png)
 
     ## [1] "0.5" "0.5" "MW"
 
-![](Assignment2_files/figure-markdown_github/unnamed-chunk-5-4.png)
+![](Assignment2_files/figure-markdown_github/unnamed-chunk-6-4.png)
 
 ``` r
 # with gaussian prior
 g_approx3(dataBIG,1000)
 ```
 
-![](Assignment2_files/figure-markdown_github/unnamed-chunk-5-5.png)
+![](Assignment2_files/figure-markdown_github/unnamed-chunk-6-5.png)
 
     ## [1] "0.504"             "0.560408921107491" "RF"
 
-![](Assignment2_files/figure-markdown_github/unnamed-chunk-5-6.png)
+![](Assignment2_files/figure-markdown_github/unnamed-chunk-6-6.png)
 
     ## [1] "1"  "1"  "KT"
 
-![](Assignment2_files/figure-markdown_github/unnamed-chunk-5-7.png)
+![](Assignment2_files/figure-markdown_github/unnamed-chunk-6-7.png)
 
     ## [1] "0.808" "1"     "JS"
 
-![](Assignment2_files/figure-markdown_github/unnamed-chunk-5-8.png)
+![](Assignment2_files/figure-markdown_github/unnamed-chunk-6-8.png)
 
     ## [1] "0.501"            "0.51304350921187" "MW"
 
@@ -339,7 +432,7 @@ g_approx5 <- function(data, dens){
           geom_point() +geom_line()+theme_classic() +
           geom_line(aes(grid, prior/dens),color= 'red')+
           ggtitle(teacher) +
-          xlab("Knowledge of CogSci")+ ylab("posterior probability"))
+          xlab("Knowledge of CogSci")+ ylab("Denisty"))
   
   #Performance
   teacher <- as.character(teacher)
@@ -350,19 +443,19 @@ g_approx5 <- function(data, dens){
 g_approx5(data,100)
 ```
 
-![](Assignment2_files/figure-markdown_github/unnamed-chunk-6-1.png)
+![](Assignment2_files/figure-markdown_github/unnamed-chunk-7-1.png)
 
     ## [1] "0.5" "0.5" "RF"
 
-![](Assignment2_files/figure-markdown_github/unnamed-chunk-6-2.png)
+![](Assignment2_files/figure-markdown_github/unnamed-chunk-7-2.png)
 
     ## [1] "0.51"             "0.57913329112768" "KT"
 
-![](Assignment2_files/figure-markdown_github/unnamed-chunk-6-3.png)
+![](Assignment2_files/figure-markdown_github/unnamed-chunk-7-3.png)
 
     ## [1] "0.72"              "0.999999999999882" "JS"
 
-![](Assignment2_files/figure-markdown_github/unnamed-chunk-6-4.png)
+![](Assignment2_files/figure-markdown_github/unnamed-chunk-7-4.png)
 
     ## [1] "0.5" "0.5" "MW"
 
@@ -373,68 +466,861 @@ g_approx5(data,100)
 1.  Bonus knowledge: all the stuff we have done can be implemented in a lme4-like fashion using the brms package. Here is an example.
 
 ``` r
-# p_load(brms)
-# 
-# d <- data.frame(
-#   Correct=c(3,2,160,66),
-#   Questions=c(6,2,198,132),
-#   Teacher=c("RF","KT","JS","MW"))
-# 
-# # Model sampling only from the prior (for checking the predictions your prior leads to)
-# FlatModel_priorCheck <- brm(Correct|trials(Questions) ~ 1, 
-#                  data = subset(d, Teacher=="RF"),
-#                  prior = prior("uniform(0,1)", class = "Intercept"),
-#                  family = binomial,
-#                  sample_prior = "only") # here we tell the model to ignore the data
-# 
-# # Plotting the predictions of the model (prior only) against the actual data
-# pp_check(FlatModel_priorCheck, nsamples = 100)
-# 
-# # Model sampling by combining prior and likelihood
-# FlatModel <- brm(Correct|trials(Questions) ~ 1, 
-#                  data = subset(d, Teacher=="RF"),
-#                  prior = prior("uniform(0,1)", class = "Intercept"),
-#                  family = binomial,
-#                  sample_prior = T)
-# # Plotting the predictions of the model (prior + likelihood) against the actual data
-# pp_check(FlatModel, nsamples = 100)
-# 
-# # plotting the posteriors and the sampling process
-# plot(FlatModel)
-# 
-# 
-# PositiveModel_priorCheck <- brm(Correct|trials(Questions) ~ 1,
-#                      data = subset(d, Teacher=="RF"),
-#                      prior = prior("normal(0.8,0.2)", 
-#                                    class = "Intercept"),
-#                      family=binomial,
-#                      sample_prior = "only")
-# pp_check(PositiveModel_priorCheck, nsamples = 100)
-# 
-# PositiveModel <- brm(Correct|trials(Questions) ~ 1,
-#                      data = subset(d, Teacher=="RF"),
-#                      prior = prior("normal(0.8,0.2)", 
-#                                    class = "Intercept"),
-#                      family=binomial,
-#                      sample_prior = T)
-# pp_check(PositiveModel, nsamples = 100)
-# plot(PositiveModel)
-# 
-# SkepticalModel_priorCheck <- brm(Correct|trials(Questions) ~ 1, 
-#                       data = subset(d, Teacher=="RF"),
-#                       prior=prior("normal(0.5,0.01)", class = "Intercept"),
-#                       family=binomial,
-#                       sample_prior = "only")
-# pp_check(SkepticalModel_priorCheck, nsamples = 100)
-# 
-# SkepticalModel <- brm(Correct|trials(Questions) ~ 1, 
-#                       data = subset(d, Teacher=="RF"),
-#                       prior = prior("normal(0.5,0.01)", class = "Intercept"),
-#                       family = binomial,
-#                       sample_prior = T)
-# pp_check(SkepticalModel, nsamples = 100)
-# plot(SkepticalModel)
+p_load(brms)
+
+d <- data.frame(
+  Correct=c(3,2,160,66),
+  Questions=c(6,2,198,132),
+  Teacher=c("RF","KT","JS","MW"))
+
+# Model sampling only from the prior (for checking the predictions your prior leads to)
+FlatModel_priorCheck <- brm(Correct|trials(Questions) ~ 1,
+                 data = subset(d, Teacher=="RF"),
+                 prior = prior("uniform(0,1)", class = "Intercept"),
+                 family = binomial,
+                 sample_prior = "only") # here we tell the model to ignore the data
 ```
+
+    ## Compiling the C++ model
+
+    ## Start sampling
+
+    ## 
+    ## SAMPLING FOR MODEL '48518db43043de5ed9671e5906dc3bd6' NOW (CHAIN 1).
+    ## Chain 1: Rejecting initial value:
+    ## Chain 1:   Log probability evaluates to log(0), i.e. negative infinity.
+    ## Chain 1:   Stan can't start sampling from this initial value.
+    ## Chain 1: Rejecting initial value:
+    ## Chain 1:   Log probability evaluates to log(0), i.e. negative infinity.
+    ## Chain 1:   Stan can't start sampling from this initial value.
+    ## Chain 1: Rejecting initial value:
+    ## Chain 1:   Log probability evaluates to log(0), i.e. negative infinity.
+    ## Chain 1:   Stan can't start sampling from this initial value.
+    ## Chain 1: Rejecting initial value:
+    ## Chain 1:   Log probability evaluates to log(0), i.e. negative infinity.
+    ## Chain 1:   Stan can't start sampling from this initial value.
+    ## Chain 1: 
+    ## Chain 1: Gradient evaluation took 0 seconds
+    ## Chain 1: 1000 transitions using 10 leapfrog steps per transition would take 0 seconds.
+    ## Chain 1: Adjust your expectations accordingly!
+    ## Chain 1: 
+    ## Chain 1: 
+    ## Chain 1: Iteration:    1 / 2000 [  0%]  (Warmup)
+    ## Chain 1: Iteration:  200 / 2000 [ 10%]  (Warmup)
+    ## Chain 1: Iteration:  400 / 2000 [ 20%]  (Warmup)
+    ## Chain 1: Iteration:  600 / 2000 [ 30%]  (Warmup)
+    ## Chain 1: Iteration:  800 / 2000 [ 40%]  (Warmup)
+    ## Chain 1: Iteration: 1000 / 2000 [ 50%]  (Warmup)
+    ## Chain 1: Iteration: 1001 / 2000 [ 50%]  (Sampling)
+    ## Chain 1: Iteration: 1200 / 2000 [ 60%]  (Sampling)
+    ## Chain 1: Iteration: 1400 / 2000 [ 70%]  (Sampling)
+    ## Chain 1: Iteration: 1600 / 2000 [ 80%]  (Sampling)
+    ## Chain 1: Iteration: 1800 / 2000 [ 90%]  (Sampling)
+    ## Chain 1: Iteration: 2000 / 2000 [100%]  (Sampling)
+    ## Chain 1: 
+    ## Chain 1:  Elapsed Time: 0.228 seconds (Warm-up)
+    ## Chain 1:                0.256 seconds (Sampling)
+    ## Chain 1:                0.484 seconds (Total)
+    ## Chain 1: 
+    ## 
+    ## SAMPLING FOR MODEL '48518db43043de5ed9671e5906dc3bd6' NOW (CHAIN 2).
+    ## Chain 2: Rejecting initial value:
+    ## Chain 2:   Log probability evaluates to log(0), i.e. negative infinity.
+    ## Chain 2:   Stan can't start sampling from this initial value.
+    ## Chain 2: Rejecting initial value:
+    ## Chain 2:   Log probability evaluates to log(0), i.e. negative infinity.
+    ## Chain 2:   Stan can't start sampling from this initial value.
+    ## Chain 2: Rejecting initial value:
+    ## Chain 2:   Log probability evaluates to log(0), i.e. negative infinity.
+    ## Chain 2:   Stan can't start sampling from this initial value.
+    ## Chain 2: Rejecting initial value:
+    ## Chain 2:   Log probability evaluates to log(0), i.e. negative infinity.
+    ## Chain 2:   Stan can't start sampling from this initial value.
+    ## Chain 2: Rejecting initial value:
+    ## Chain 2:   Log probability evaluates to log(0), i.e. negative infinity.
+    ## Chain 2:   Stan can't start sampling from this initial value.
+    ## Chain 2: 
+    ## Chain 2: Gradient evaluation took 0 seconds
+    ## Chain 2: 1000 transitions using 10 leapfrog steps per transition would take 0 seconds.
+    ## Chain 2: Adjust your expectations accordingly!
+    ## Chain 2: 
+    ## Chain 2: 
+    ## Chain 2: Iteration:    1 / 2000 [  0%]  (Warmup)
+    ## Chain 2: Iteration:  200 / 2000 [ 10%]  (Warmup)
+    ## Chain 2: Iteration:  400 / 2000 [ 20%]  (Warmup)
+    ## Chain 2: Iteration:  600 / 2000 [ 30%]  (Warmup)
+    ## Chain 2: Iteration:  800 / 2000 [ 40%]  (Warmup)
+    ## Chain 2: Iteration: 1000 / 2000 [ 50%]  (Warmup)
+    ## Chain 2: Iteration: 1001 / 2000 [ 50%]  (Sampling)
+    ## Chain 2: Iteration: 1200 / 2000 [ 60%]  (Sampling)
+    ## Chain 2: Iteration: 1400 / 2000 [ 70%]  (Sampling)
+    ## Chain 2: Iteration: 1600 / 2000 [ 80%]  (Sampling)
+    ## Chain 2: Iteration: 1800 / 2000 [ 90%]  (Sampling)
+    ## Chain 2: Iteration: 2000 / 2000 [100%]  (Sampling)
+    ## Chain 2: 
+    ## Chain 2:  Elapsed Time: 0.224 seconds (Warm-up)
+    ## Chain 2:                0.221 seconds (Sampling)
+    ## Chain 2:                0.445 seconds (Total)
+    ## Chain 2: 
+    ## 
+    ## SAMPLING FOR MODEL '48518db43043de5ed9671e5906dc3bd6' NOW (CHAIN 3).
+    ## Chain 3: Rejecting initial value:
+    ## Chain 3:   Log probability evaluates to log(0), i.e. negative infinity.
+    ## Chain 3:   Stan can't start sampling from this initial value.
+    ## Chain 3: Rejecting initial value:
+    ## Chain 3:   Log probability evaluates to log(0), i.e. negative infinity.
+    ## Chain 3:   Stan can't start sampling from this initial value.
+    ## Chain 3: Rejecting initial value:
+    ## Chain 3:   Log probability evaluates to log(0), i.e. negative infinity.
+    ## Chain 3:   Stan can't start sampling from this initial value.
+    ## Chain 3: Rejecting initial value:
+    ## Chain 3:   Log probability evaluates to log(0), i.e. negative infinity.
+    ## Chain 3:   Stan can't start sampling from this initial value.
+    ## Chain 3: Rejecting initial value:
+    ## Chain 3:   Log probability evaluates to log(0), i.e. negative infinity.
+    ## Chain 3:   Stan can't start sampling from this initial value.
+    ## Chain 3: Rejecting initial value:
+    ## Chain 3:   Log probability evaluates to log(0), i.e. negative infinity.
+    ## Chain 3:   Stan can't start sampling from this initial value.
+    ## Chain 3: 
+    ## Chain 3: Gradient evaluation took 0 seconds
+    ## Chain 3: 1000 transitions using 10 leapfrog steps per transition would take 0 seconds.
+    ## Chain 3: Adjust your expectations accordingly!
+    ## Chain 3: 
+    ## Chain 3: 
+    ## Chain 3: Iteration:    1 / 2000 [  0%]  (Warmup)
+    ## Chain 3: Iteration:  200 / 2000 [ 10%]  (Warmup)
+    ## Chain 3: Iteration:  400 / 2000 [ 20%]  (Warmup)
+    ## Chain 3: Iteration:  600 / 2000 [ 30%]  (Warmup)
+    ## Chain 3: Iteration:  800 / 2000 [ 40%]  (Warmup)
+    ## Chain 3: Iteration: 1000 / 2000 [ 50%]  (Warmup)
+    ## Chain 3: Iteration: 1001 / 2000 [ 50%]  (Sampling)
+    ## Chain 3: Iteration: 1200 / 2000 [ 60%]  (Sampling)
+    ## Chain 3: Iteration: 1400 / 2000 [ 70%]  (Sampling)
+    ## Chain 3: Iteration: 1600 / 2000 [ 80%]  (Sampling)
+    ## Chain 3: Iteration: 1800 / 2000 [ 90%]  (Sampling)
+    ## Chain 3: Iteration: 2000 / 2000 [100%]  (Sampling)
+    ## Chain 3: 
+    ## Chain 3:  Elapsed Time: 0.201 seconds (Warm-up)
+    ## Chain 3:                0.257 seconds (Sampling)
+    ## Chain 3:                0.458 seconds (Total)
+    ## Chain 3: 
+    ## 
+    ## SAMPLING FOR MODEL '48518db43043de5ed9671e5906dc3bd6' NOW (CHAIN 4).
+    ## Chain 4: Rejecting initial value:
+    ## Chain 4:   Log probability evaluates to log(0), i.e. negative infinity.
+    ## Chain 4:   Stan can't start sampling from this initial value.
+    ## Chain 4: Rejecting initial value:
+    ## Chain 4:   Log probability evaluates to log(0), i.e. negative infinity.
+    ## Chain 4:   Stan can't start sampling from this initial value.
+    ## Chain 4: 
+    ## Chain 4: Gradient evaluation took 0 seconds
+    ## Chain 4: 1000 transitions using 10 leapfrog steps per transition would take 0 seconds.
+    ## Chain 4: Adjust your expectations accordingly!
+    ## Chain 4: 
+    ## Chain 4: 
+    ## Chain 4: Iteration:    1 / 2000 [  0%]  (Warmup)
+    ## Chain 4: Iteration:  200 / 2000 [ 10%]  (Warmup)
+    ## Chain 4: Iteration:  400 / 2000 [ 20%]  (Warmup)
+    ## Chain 4: Iteration:  600 / 2000 [ 30%]  (Warmup)
+    ## Chain 4: Iteration:  800 / 2000 [ 40%]  (Warmup)
+    ## Chain 4: Iteration: 1000 / 2000 [ 50%]  (Warmup)
+    ## Chain 4: Iteration: 1001 / 2000 [ 50%]  (Sampling)
+    ## Chain 4: Iteration: 1200 / 2000 [ 60%]  (Sampling)
+    ## Chain 4: Iteration: 1400 / 2000 [ 70%]  (Sampling)
+    ## Chain 4: Iteration: 1600 / 2000 [ 80%]  (Sampling)
+    ## Chain 4: Iteration: 1800 / 2000 [ 90%]  (Sampling)
+    ## Chain 4: Iteration: 2000 / 2000 [100%]  (Sampling)
+    ## Chain 4: 
+    ## Chain 4:  Elapsed Time: 0.189 seconds (Warm-up)
+    ## Chain 4:                0.228 seconds (Sampling)
+    ## Chain 4:                0.417 seconds (Total)
+    ## Chain 4:
+
+    ## Warning: There were 3964 divergent transitions after warmup. Increasing adapt_delta above 0.8 may help. See
+    ## http://mc-stan.org/misc/warnings.html#divergent-transitions-after-warmup
+
+    ## Warning: There were 36 transitions after warmup that exceeded the maximum treedepth. Increase max_treedepth above 10. See
+    ## http://mc-stan.org/misc/warnings.html#maximum-treedepth-exceeded
+
+    ## Warning: Examine the pairs() plot to diagnose sampling problems
+
+    ## Warning: The largest R-hat is NA, indicating chains have not mixed.
+    ## Running the chains for more iterations may help. See
+    ## http://mc-stan.org/misc/warnings.html#r-hat
+
+    ## Warning: Bulk Effective Samples Size (ESS) is too low, indicating posterior means and medians may be unreliable.
+    ## Running the chains for more iterations may help. See
+    ## http://mc-stan.org/misc/warnings.html#bulk-ess
+
+    ## Warning: Tail Effective Samples Size (ESS) is too low, indicating posterior variances and tail quantiles may be unreliable.
+    ## Running the chains for more iterations may help. See
+    ## http://mc-stan.org/misc/warnings.html#tail-ess
+
+``` r
+# Plotting the predictions of the model (prior only) against the actual data
+#pp_check(FlatModel_priorCheck, nsamples = 100)
+
+# Model sampling by combining prior and likelihood
+FlatModel <- brm(Correct|trials(Questions) ~ 1,
+                 data = subset(d, Teacher=="RF"),
+                 prior = prior("uniform(0,1)", class = "Intercept"),
+                 family = binomial,
+                 sample_prior = T)
+```
+
+    ## Compiling the C++ model
+    ## Start sampling
+
+    ## 
+    ## SAMPLING FOR MODEL '6e8a8656c9cfd60c8957eedba20964b6' NOW (CHAIN 1).
+    ## Chain 1: 
+    ## Chain 1: Gradient evaluation took 0 seconds
+    ## Chain 1: 1000 transitions using 10 leapfrog steps per transition would take 0 seconds.
+    ## Chain 1: Adjust your expectations accordingly!
+    ## Chain 1: 
+    ## Chain 1: 
+    ## Chain 1: Iteration:    1 / 2000 [  0%]  (Warmup)
+    ## Chain 1: Iteration:  200 / 2000 [ 10%]  (Warmup)
+    ## Chain 1: Iteration:  400 / 2000 [ 20%]  (Warmup)
+    ## Chain 1: Iteration:  600 / 2000 [ 30%]  (Warmup)
+    ## Chain 1: Iteration:  800 / 2000 [ 40%]  (Warmup)
+    ## Chain 1: Iteration: 1000 / 2000 [ 50%]  (Warmup)
+    ## Chain 1: Iteration: 1001 / 2000 [ 50%]  (Sampling)
+    ## Chain 1: Iteration: 1200 / 2000 [ 60%]  (Sampling)
+    ## Chain 1: Iteration: 1400 / 2000 [ 70%]  (Sampling)
+    ## Chain 1: Iteration: 1600 / 2000 [ 80%]  (Sampling)
+    ## Chain 1: Iteration: 1800 / 2000 [ 90%]  (Sampling)
+    ## Chain 1: Iteration: 2000 / 2000 [100%]  (Sampling)
+    ## Chain 1: 
+    ## Chain 1:  Elapsed Time: 0.155 seconds (Warm-up)
+    ## Chain 1:                0.094 seconds (Sampling)
+    ## Chain 1:                0.249 seconds (Total)
+    ## Chain 1: 
+    ## 
+    ## SAMPLING FOR MODEL '6e8a8656c9cfd60c8957eedba20964b6' NOW (CHAIN 2).
+    ## Chain 2: Rejecting initial value:
+    ## Chain 2:   Log probability evaluates to log(0), i.e. negative infinity.
+    ## Chain 2:   Stan can't start sampling from this initial value.
+    ## Chain 2: Rejecting initial value:
+    ## Chain 2:   Log probability evaluates to log(0), i.e. negative infinity.
+    ## Chain 2:   Stan can't start sampling from this initial value.
+    ## Chain 2: Rejecting initial value:
+    ## Chain 2:   Log probability evaluates to log(0), i.e. negative infinity.
+    ## Chain 2:   Stan can't start sampling from this initial value.
+    ## Chain 2: 
+    ## Chain 2: Gradient evaluation took 0.001 seconds
+    ## Chain 2: 1000 transitions using 10 leapfrog steps per transition would take 10 seconds.
+    ## Chain 2: Adjust your expectations accordingly!
+    ## Chain 2: 
+    ## Chain 2: 
+    ## Chain 2: Iteration:    1 / 2000 [  0%]  (Warmup)
+    ## Chain 2: Iteration:  200 / 2000 [ 10%]  (Warmup)
+    ## Chain 2: Iteration:  400 / 2000 [ 20%]  (Warmup)
+    ## Chain 2: Iteration:  600 / 2000 [ 30%]  (Warmup)
+    ## Chain 2: Iteration:  800 / 2000 [ 40%]  (Warmup)
+    ## Chain 2: Iteration: 1000 / 2000 [ 50%]  (Warmup)
+    ## Chain 2: Iteration: 1001 / 2000 [ 50%]  (Sampling)
+    ## Chain 2: Iteration: 1200 / 2000 [ 60%]  (Sampling)
+    ## Chain 2: Iteration: 1400 / 2000 [ 70%]  (Sampling)
+    ## Chain 2: Iteration: 1600 / 2000 [ 80%]  (Sampling)
+    ## Chain 2: Iteration: 1800 / 2000 [ 90%]  (Sampling)
+    ## Chain 2: Iteration: 2000 / 2000 [100%]  (Sampling)
+    ## Chain 2: 
+    ## Chain 2:  Elapsed Time: 0.124 seconds (Warm-up)
+    ## Chain 2:                0.092 seconds (Sampling)
+    ## Chain 2:                0.216 seconds (Total)
+    ## Chain 2: 
+    ## 
+    ## SAMPLING FOR MODEL '6e8a8656c9cfd60c8957eedba20964b6' NOW (CHAIN 3).
+    ## Chain 3: Rejecting initial value:
+    ## Chain 3:   Log probability evaluates to log(0), i.e. negative infinity.
+    ## Chain 3:   Stan can't start sampling from this initial value.
+    ## Chain 3: Rejecting initial value:
+    ## Chain 3:   Log probability evaluates to log(0), i.e. negative infinity.
+    ## Chain 3:   Stan can't start sampling from this initial value.
+    ## Chain 3: Rejecting initial value:
+    ## Chain 3:   Log probability evaluates to log(0), i.e. negative infinity.
+    ## Chain 3:   Stan can't start sampling from this initial value.
+    ## Chain 3: Rejecting initial value:
+    ## Chain 3:   Log probability evaluates to log(0), i.e. negative infinity.
+    ## Chain 3:   Stan can't start sampling from this initial value.
+    ## Chain 3: Rejecting initial value:
+    ## Chain 3:   Log probability evaluates to log(0), i.e. negative infinity.
+    ## Chain 3:   Stan can't start sampling from this initial value.
+    ## Chain 3: Rejecting initial value:
+    ## Chain 3:   Log probability evaluates to log(0), i.e. negative infinity.
+    ## Chain 3:   Stan can't start sampling from this initial value.
+    ## Chain 3: Rejecting initial value:
+    ## Chain 3:   Log probability evaluates to log(0), i.e. negative infinity.
+    ## Chain 3:   Stan can't start sampling from this initial value.
+    ## Chain 3: Rejecting initial value:
+    ## Chain 3:   Log probability evaluates to log(0), i.e. negative infinity.
+    ## Chain 3:   Stan can't start sampling from this initial value.
+    ## Chain 3: Rejecting initial value:
+    ## Chain 3:   Log probability evaluates to log(0), i.e. negative infinity.
+    ## Chain 3:   Stan can't start sampling from this initial value.
+    ## Chain 3: Rejecting initial value:
+    ## Chain 3:   Log probability evaluates to log(0), i.e. negative infinity.
+    ## Chain 3:   Stan can't start sampling from this initial value.
+    ## Chain 3: Rejecting initial value:
+    ## Chain 3:   Log probability evaluates to log(0), i.e. negative infinity.
+    ## Chain 3:   Stan can't start sampling from this initial value.
+    ## Chain 3: Rejecting initial value:
+    ## Chain 3:   Log probability evaluates to log(0), i.e. negative infinity.
+    ## Chain 3:   Stan can't start sampling from this initial value.
+    ## Chain 3: Rejecting initial value:
+    ## Chain 3:   Log probability evaluates to log(0), i.e. negative infinity.
+    ## Chain 3:   Stan can't start sampling from this initial value.
+    ## Chain 3: Rejecting initial value:
+    ## Chain 3:   Log probability evaluates to log(0), i.e. negative infinity.
+    ## Chain 3:   Stan can't start sampling from this initial value.
+    ## Chain 3: Rejecting initial value:
+    ## Chain 3:   Log probability evaluates to log(0), i.e. negative infinity.
+    ## Chain 3:   Stan can't start sampling from this initial value.
+    ## Chain 3: Rejecting initial value:
+    ## Chain 3:   Log probability evaluates to log(0), i.e. negative infinity.
+    ## Chain 3:   Stan can't start sampling from this initial value.
+    ## Chain 3: Rejecting initial value:
+    ## Chain 3:   Log probability evaluates to log(0), i.e. negative infinity.
+    ## Chain 3:   Stan can't start sampling from this initial value.
+    ## Chain 3: Rejecting initial value:
+    ## Chain 3:   Log probability evaluates to log(0), i.e. negative infinity.
+    ## Chain 3:   Stan can't start sampling from this initial value.
+    ## Chain 3: 
+    ## Chain 3: Gradient evaluation took 0 seconds
+    ## Chain 3: 1000 transitions using 10 leapfrog steps per transition would take 0 seconds.
+    ## Chain 3: Adjust your expectations accordingly!
+    ## Chain 3: 
+    ## Chain 3: 
+    ## Chain 3: Iteration:    1 / 2000 [  0%]  (Warmup)
+    ## Chain 3: Iteration:  200 / 2000 [ 10%]  (Warmup)
+    ## Chain 3: Iteration:  400 / 2000 [ 20%]  (Warmup)
+    ## Chain 3: Iteration:  600 / 2000 [ 30%]  (Warmup)
+    ## Chain 3: Iteration:  800 / 2000 [ 40%]  (Warmup)
+    ## Chain 3: Iteration: 1000 / 2000 [ 50%]  (Warmup)
+    ## Chain 3: Iteration: 1001 / 2000 [ 50%]  (Sampling)
+    ## Chain 3: Iteration: 1200 / 2000 [ 60%]  (Sampling)
+    ## Chain 3: Iteration: 1400 / 2000 [ 70%]  (Sampling)
+    ## Chain 3: Iteration: 1600 / 2000 [ 80%]  (Sampling)
+    ## Chain 3: Iteration: 1800 / 2000 [ 90%]  (Sampling)
+    ## Chain 3: Iteration: 2000 / 2000 [100%]  (Sampling)
+    ## Chain 3: 
+    ## Chain 3:  Elapsed Time: 0.132 seconds (Warm-up)
+    ## Chain 3:                0.195 seconds (Sampling)
+    ## Chain 3:                0.327 seconds (Total)
+    ## Chain 3: 
+    ## 
+    ## SAMPLING FOR MODEL '6e8a8656c9cfd60c8957eedba20964b6' NOW (CHAIN 4).
+    ## Chain 4: Rejecting initial value:
+    ## Chain 4:   Log probability evaluates to log(0), i.e. negative infinity.
+    ## Chain 4:   Stan can't start sampling from this initial value.
+    ## Chain 4: 
+    ## Chain 4: Gradient evaluation took 0 seconds
+    ## Chain 4: 1000 transitions using 10 leapfrog steps per transition would take 0 seconds.
+    ## Chain 4: Adjust your expectations accordingly!
+    ## Chain 4: 
+    ## Chain 4: 
+    ## Chain 4: Iteration:    1 / 2000 [  0%]  (Warmup)
+    ## Chain 4: Iteration:  200 / 2000 [ 10%]  (Warmup)
+    ## Chain 4: Iteration:  400 / 2000 [ 20%]  (Warmup)
+    ## Chain 4: Iteration:  600 / 2000 [ 30%]  (Warmup)
+    ## Chain 4: Iteration:  800 / 2000 [ 40%]  (Warmup)
+    ## Chain 4: Iteration: 1000 / 2000 [ 50%]  (Warmup)
+    ## Chain 4: Iteration: 1001 / 2000 [ 50%]  (Sampling)
+    ## Chain 4: Iteration: 1200 / 2000 [ 60%]  (Sampling)
+    ## Chain 4: Iteration: 1400 / 2000 [ 70%]  (Sampling)
+    ## Chain 4: Iteration: 1600 / 2000 [ 80%]  (Sampling)
+    ## Chain 4: Iteration: 1800 / 2000 [ 90%]  (Sampling)
+    ## Chain 4: Iteration: 2000 / 2000 [100%]  (Sampling)
+    ## Chain 4: 
+    ## Chain 4:  Elapsed Time: 0.128 seconds (Warm-up)
+    ## Chain 4:                0.121 seconds (Sampling)
+    ## Chain 4:                0.249 seconds (Total)
+    ## Chain 4:
+
+    ## Warning: There were 2669 divergent transitions after warmup. Increasing adapt_delta above 0.8 may help. See
+    ## http://mc-stan.org/misc/warnings.html#divergent-transitions-after-warmup
+
+    ## Warning: Examine the pairs() plot to diagnose sampling problems
+
+``` r
+# Plotting the predictions of the model (prior + likelihood) against the actual data
+#pp_check(FlatModel, nsamples = 100)
+
+# plotting the posteriors and the sampling process
+plot(FlatModel)
+```
+
+![](Assignment2_files/figure-markdown_github/unnamed-chunk-8-1.png)
+
+``` r
+PositiveModel_priorCheck <- brm(Correct|trials(Questions) ~ 1,
+                     data = subset(d, Teacher=="RF"),
+                     prior = prior("normal(0.8,0.2)",
+                                   class = "Intercept"),
+                     family=binomial,
+                     sample_prior = "only")
+```
+
+    ## Compiling the C++ model
+    ## Start sampling
+
+    ## 
+    ## SAMPLING FOR MODEL '8e796550a45fb01f24092316f2cafcb0' NOW (CHAIN 1).
+    ## Chain 1: 
+    ## Chain 1: Gradient evaluation took 0 seconds
+    ## Chain 1: 1000 transitions using 10 leapfrog steps per transition would take 0 seconds.
+    ## Chain 1: Adjust your expectations accordingly!
+    ## Chain 1: 
+    ## Chain 1: 
+    ## Chain 1: Iteration:    1 / 2000 [  0%]  (Warmup)
+    ## Chain 1: Iteration:  200 / 2000 [ 10%]  (Warmup)
+    ## Chain 1: Iteration:  400 / 2000 [ 20%]  (Warmup)
+    ## Chain 1: Iteration:  600 / 2000 [ 30%]  (Warmup)
+    ## Chain 1: Iteration:  800 / 2000 [ 40%]  (Warmup)
+    ## Chain 1: Iteration: 1000 / 2000 [ 50%]  (Warmup)
+    ## Chain 1: Iteration: 1001 / 2000 [ 50%]  (Sampling)
+    ## Chain 1: Iteration: 1200 / 2000 [ 60%]  (Sampling)
+    ## Chain 1: Iteration: 1400 / 2000 [ 70%]  (Sampling)
+    ## Chain 1: Iteration: 1600 / 2000 [ 80%]  (Sampling)
+    ## Chain 1: Iteration: 1800 / 2000 [ 90%]  (Sampling)
+    ## Chain 1: Iteration: 2000 / 2000 [100%]  (Sampling)
+    ## Chain 1: 
+    ## Chain 1:  Elapsed Time: 0.024 seconds (Warm-up)
+    ## Chain 1:                0.028 seconds (Sampling)
+    ## Chain 1:                0.052 seconds (Total)
+    ## Chain 1: 
+    ## 
+    ## SAMPLING FOR MODEL '8e796550a45fb01f24092316f2cafcb0' NOW (CHAIN 2).
+    ## Chain 2: 
+    ## Chain 2: Gradient evaluation took 0 seconds
+    ## Chain 2: 1000 transitions using 10 leapfrog steps per transition would take 0 seconds.
+    ## Chain 2: Adjust your expectations accordingly!
+    ## Chain 2: 
+    ## Chain 2: 
+    ## Chain 2: Iteration:    1 / 2000 [  0%]  (Warmup)
+    ## Chain 2: Iteration:  200 / 2000 [ 10%]  (Warmup)
+    ## Chain 2: Iteration:  400 / 2000 [ 20%]  (Warmup)
+    ## Chain 2: Iteration:  600 / 2000 [ 30%]  (Warmup)
+    ## Chain 2: Iteration:  800 / 2000 [ 40%]  (Warmup)
+    ## Chain 2: Iteration: 1000 / 2000 [ 50%]  (Warmup)
+    ## Chain 2: Iteration: 1001 / 2000 [ 50%]  (Sampling)
+    ## Chain 2: Iteration: 1200 / 2000 [ 60%]  (Sampling)
+    ## Chain 2: Iteration: 1400 / 2000 [ 70%]  (Sampling)
+    ## Chain 2: Iteration: 1600 / 2000 [ 80%]  (Sampling)
+    ## Chain 2: Iteration: 1800 / 2000 [ 90%]  (Sampling)
+    ## Chain 2: Iteration: 2000 / 2000 [100%]  (Sampling)
+    ## Chain 2: 
+    ## Chain 2:  Elapsed Time: 0.027 seconds (Warm-up)
+    ## Chain 2:                0.021 seconds (Sampling)
+    ## Chain 2:                0.048 seconds (Total)
+    ## Chain 2: 
+    ## 
+    ## SAMPLING FOR MODEL '8e796550a45fb01f24092316f2cafcb0' NOW (CHAIN 3).
+    ## Chain 3: 
+    ## Chain 3: Gradient evaluation took 0 seconds
+    ## Chain 3: 1000 transitions using 10 leapfrog steps per transition would take 0 seconds.
+    ## Chain 3: Adjust your expectations accordingly!
+    ## Chain 3: 
+    ## Chain 3: 
+    ## Chain 3: Iteration:    1 / 2000 [  0%]  (Warmup)
+    ## Chain 3: Iteration:  200 / 2000 [ 10%]  (Warmup)
+    ## Chain 3: Iteration:  400 / 2000 [ 20%]  (Warmup)
+    ## Chain 3: Iteration:  600 / 2000 [ 30%]  (Warmup)
+    ## Chain 3: Iteration:  800 / 2000 [ 40%]  (Warmup)
+    ## Chain 3: Iteration: 1000 / 2000 [ 50%]  (Warmup)
+    ## Chain 3: Iteration: 1001 / 2000 [ 50%]  (Sampling)
+    ## Chain 3: Iteration: 1200 / 2000 [ 60%]  (Sampling)
+    ## Chain 3: Iteration: 1400 / 2000 [ 70%]  (Sampling)
+    ## Chain 3: Iteration: 1600 / 2000 [ 80%]  (Sampling)
+    ## Chain 3: Iteration: 1800 / 2000 [ 90%]  (Sampling)
+    ## Chain 3: Iteration: 2000 / 2000 [100%]  (Sampling)
+    ## Chain 3: 
+    ## Chain 3:  Elapsed Time: 0.024 seconds (Warm-up)
+    ## Chain 3:                0.029 seconds (Sampling)
+    ## Chain 3:                0.053 seconds (Total)
+    ## Chain 3: 
+    ## 
+    ## SAMPLING FOR MODEL '8e796550a45fb01f24092316f2cafcb0' NOW (CHAIN 4).
+    ## Chain 4: 
+    ## Chain 4: Gradient evaluation took 0 seconds
+    ## Chain 4: 1000 transitions using 10 leapfrog steps per transition would take 0 seconds.
+    ## Chain 4: Adjust your expectations accordingly!
+    ## Chain 4: 
+    ## Chain 4: 
+    ## Chain 4: Iteration:    1 / 2000 [  0%]  (Warmup)
+    ## Chain 4: Iteration:  200 / 2000 [ 10%]  (Warmup)
+    ## Chain 4: Iteration:  400 / 2000 [ 20%]  (Warmup)
+    ## Chain 4: Iteration:  600 / 2000 [ 30%]  (Warmup)
+    ## Chain 4: Iteration:  800 / 2000 [ 40%]  (Warmup)
+    ## Chain 4: Iteration: 1000 / 2000 [ 50%]  (Warmup)
+    ## Chain 4: Iteration: 1001 / 2000 [ 50%]  (Sampling)
+    ## Chain 4: Iteration: 1200 / 2000 [ 60%]  (Sampling)
+    ## Chain 4: Iteration: 1400 / 2000 [ 70%]  (Sampling)
+    ## Chain 4: Iteration: 1600 / 2000 [ 80%]  (Sampling)
+    ## Chain 4: Iteration: 1800 / 2000 [ 90%]  (Sampling)
+    ## Chain 4: Iteration: 2000 / 2000 [100%]  (Sampling)
+    ## Chain 4: 
+    ## Chain 4:  Elapsed Time: 0.021 seconds (Warm-up)
+    ## Chain 4:                0.027 seconds (Sampling)
+    ## Chain 4:                0.048 seconds (Total)
+    ## Chain 4:
+
+``` r
+#pp_check(PositiveModel_priorCheck, nsamples = 100)
+
+PositiveModel <- brm(Correct|trials(Questions) ~ 1,
+                     data = subset(d, Teacher=="RF"),
+                     prior = prior("normal(0.8,0.2)",
+                                   class = "Intercept"),
+                     family=binomial,
+                     sample_prior = T)
+```
+
+    ## Compiling the C++ model
+    ## Start sampling
+
+    ## 
+    ## SAMPLING FOR MODEL '756fda1f58f2c5c50c2cfe8a482e7b82' NOW (CHAIN 1).
+    ## Chain 1: 
+    ## Chain 1: Gradient evaluation took 0 seconds
+    ## Chain 1: 1000 transitions using 10 leapfrog steps per transition would take 0 seconds.
+    ## Chain 1: Adjust your expectations accordingly!
+    ## Chain 1: 
+    ## Chain 1: 
+    ## Chain 1: Iteration:    1 / 2000 [  0%]  (Warmup)
+    ## Chain 1: Iteration:  200 / 2000 [ 10%]  (Warmup)
+    ## Chain 1: Iteration:  400 / 2000 [ 20%]  (Warmup)
+    ## Chain 1: Iteration:  600 / 2000 [ 30%]  (Warmup)
+    ## Chain 1: Iteration:  800 / 2000 [ 40%]  (Warmup)
+    ## Chain 1: Iteration: 1000 / 2000 [ 50%]  (Warmup)
+    ## Chain 1: Iteration: 1001 / 2000 [ 50%]  (Sampling)
+    ## Chain 1: Iteration: 1200 / 2000 [ 60%]  (Sampling)
+    ## Chain 1: Iteration: 1400 / 2000 [ 70%]  (Sampling)
+    ## Chain 1: Iteration: 1600 / 2000 [ 80%]  (Sampling)
+    ## Chain 1: Iteration: 1800 / 2000 [ 90%]  (Sampling)
+    ## Chain 1: Iteration: 2000 / 2000 [100%]  (Sampling)
+    ## Chain 1: 
+    ## Chain 1:  Elapsed Time: 0.043 seconds (Warm-up)
+    ## Chain 1:                0.039 seconds (Sampling)
+    ## Chain 1:                0.082 seconds (Total)
+    ## Chain 1: 
+    ## 
+    ## SAMPLING FOR MODEL '756fda1f58f2c5c50c2cfe8a482e7b82' NOW (CHAIN 2).
+    ## Chain 2: 
+    ## Chain 2: Gradient evaluation took 0 seconds
+    ## Chain 2: 1000 transitions using 10 leapfrog steps per transition would take 0 seconds.
+    ## Chain 2: Adjust your expectations accordingly!
+    ## Chain 2: 
+    ## Chain 2: 
+    ## Chain 2: Iteration:    1 / 2000 [  0%]  (Warmup)
+    ## Chain 2: Iteration:  200 / 2000 [ 10%]  (Warmup)
+    ## Chain 2: Iteration:  400 / 2000 [ 20%]  (Warmup)
+    ## Chain 2: Iteration:  600 / 2000 [ 30%]  (Warmup)
+    ## Chain 2: Iteration:  800 / 2000 [ 40%]  (Warmup)
+    ## Chain 2: Iteration: 1000 / 2000 [ 50%]  (Warmup)
+    ## Chain 2: Iteration: 1001 / 2000 [ 50%]  (Sampling)
+    ## Chain 2: Iteration: 1200 / 2000 [ 60%]  (Sampling)
+    ## Chain 2: Iteration: 1400 / 2000 [ 70%]  (Sampling)
+    ## Chain 2: Iteration: 1600 / 2000 [ 80%]  (Sampling)
+    ## Chain 2: Iteration: 1800 / 2000 [ 90%]  (Sampling)
+    ## Chain 2: Iteration: 2000 / 2000 [100%]  (Sampling)
+    ## Chain 2: 
+    ## Chain 2:  Elapsed Time: 0.046 seconds (Warm-up)
+    ## Chain 2:                0.034 seconds (Sampling)
+    ## Chain 2:                0.08 seconds (Total)
+    ## Chain 2: 
+    ## 
+    ## SAMPLING FOR MODEL '756fda1f58f2c5c50c2cfe8a482e7b82' NOW (CHAIN 3).
+    ## Chain 3: 
+    ## Chain 3: Gradient evaluation took 0 seconds
+    ## Chain 3: 1000 transitions using 10 leapfrog steps per transition would take 0 seconds.
+    ## Chain 3: Adjust your expectations accordingly!
+    ## Chain 3: 
+    ## Chain 3: 
+    ## Chain 3: Iteration:    1 / 2000 [  0%]  (Warmup)
+    ## Chain 3: Iteration:  200 / 2000 [ 10%]  (Warmup)
+    ## Chain 3: Iteration:  400 / 2000 [ 20%]  (Warmup)
+    ## Chain 3: Iteration:  600 / 2000 [ 30%]  (Warmup)
+    ## Chain 3: Iteration:  800 / 2000 [ 40%]  (Warmup)
+    ## Chain 3: Iteration: 1000 / 2000 [ 50%]  (Warmup)
+    ## Chain 3: Iteration: 1001 / 2000 [ 50%]  (Sampling)
+    ## Chain 3: Iteration: 1200 / 2000 [ 60%]  (Sampling)
+    ## Chain 3: Iteration: 1400 / 2000 [ 70%]  (Sampling)
+    ## Chain 3: Iteration: 1600 / 2000 [ 80%]  (Sampling)
+    ## Chain 3: Iteration: 1800 / 2000 [ 90%]  (Sampling)
+    ## Chain 3: Iteration: 2000 / 2000 [100%]  (Sampling)
+    ## Chain 3: 
+    ## Chain 3:  Elapsed Time: 0.033 seconds (Warm-up)
+    ## Chain 3:                0.033 seconds (Sampling)
+    ## Chain 3:                0.066 seconds (Total)
+    ## Chain 3: 
+    ## 
+    ## SAMPLING FOR MODEL '756fda1f58f2c5c50c2cfe8a482e7b82' NOW (CHAIN 4).
+    ## Chain 4: 
+    ## Chain 4: Gradient evaluation took 0 seconds
+    ## Chain 4: 1000 transitions using 10 leapfrog steps per transition would take 0 seconds.
+    ## Chain 4: Adjust your expectations accordingly!
+    ## Chain 4: 
+    ## Chain 4: 
+    ## Chain 4: Iteration:    1 / 2000 [  0%]  (Warmup)
+    ## Chain 4: Iteration:  200 / 2000 [ 10%]  (Warmup)
+    ## Chain 4: Iteration:  400 / 2000 [ 20%]  (Warmup)
+    ## Chain 4: Iteration:  600 / 2000 [ 30%]  (Warmup)
+    ## Chain 4: Iteration:  800 / 2000 [ 40%]  (Warmup)
+    ## Chain 4: Iteration: 1000 / 2000 [ 50%]  (Warmup)
+    ## Chain 4: Iteration: 1001 / 2000 [ 50%]  (Sampling)
+    ## Chain 4: Iteration: 1200 / 2000 [ 60%]  (Sampling)
+    ## Chain 4: Iteration: 1400 / 2000 [ 70%]  (Sampling)
+    ## Chain 4: Iteration: 1600 / 2000 [ 80%]  (Sampling)
+    ## Chain 4: Iteration: 1800 / 2000 [ 90%]  (Sampling)
+    ## Chain 4: Iteration: 2000 / 2000 [100%]  (Sampling)
+    ## Chain 4: 
+    ## Chain 4:  Elapsed Time: 0.045 seconds (Warm-up)
+    ## Chain 4:                0.046 seconds (Sampling)
+    ## Chain 4:                0.091 seconds (Total)
+    ## Chain 4:
+
+``` r
+#pp_check(PositiveModel, nsamples = 100)
+plot(PositiveModel)
+```
+
+![](Assignment2_files/figure-markdown_github/unnamed-chunk-8-2.png)
+
+``` r
+SkepticalModel_priorCheck <- brm(Correct|trials(Questions) ~ 1,
+                      data = subset(d, Teacher=="RF"),
+                      prior=prior("normal(0.5,0.01)", class = "Intercept"),
+                      family=binomial,
+                      sample_prior = "only")
+```
+
+    ## Compiling the C++ model
+    ## Start sampling
+
+    ## 
+    ## SAMPLING FOR MODEL '7c2788ab0560927e39f630a862813898' NOW (CHAIN 1).
+    ## Chain 1: 
+    ## Chain 1: Gradient evaluation took 0 seconds
+    ## Chain 1: 1000 transitions using 10 leapfrog steps per transition would take 0 seconds.
+    ## Chain 1: Adjust your expectations accordingly!
+    ## Chain 1: 
+    ## Chain 1: 
+    ## Chain 1: Iteration:    1 / 2000 [  0%]  (Warmup)
+    ## Chain 1: Iteration:  200 / 2000 [ 10%]  (Warmup)
+    ## Chain 1: Iteration:  400 / 2000 [ 20%]  (Warmup)
+    ## Chain 1: Iteration:  600 / 2000 [ 30%]  (Warmup)
+    ## Chain 1: Iteration:  800 / 2000 [ 40%]  (Warmup)
+    ## Chain 1: Iteration: 1000 / 2000 [ 50%]  (Warmup)
+    ## Chain 1: Iteration: 1001 / 2000 [ 50%]  (Sampling)
+    ## Chain 1: Iteration: 1200 / 2000 [ 60%]  (Sampling)
+    ## Chain 1: Iteration: 1400 / 2000 [ 70%]  (Sampling)
+    ## Chain 1: Iteration: 1600 / 2000 [ 80%]  (Sampling)
+    ## Chain 1: Iteration: 1800 / 2000 [ 90%]  (Sampling)
+    ## Chain 1: Iteration: 2000 / 2000 [100%]  (Sampling)
+    ## Chain 1: 
+    ## Chain 1:  Elapsed Time: 0.019 seconds (Warm-up)
+    ## Chain 1:                0.023 seconds (Sampling)
+    ## Chain 1:                0.042 seconds (Total)
+    ## Chain 1: 
+    ## 
+    ## SAMPLING FOR MODEL '7c2788ab0560927e39f630a862813898' NOW (CHAIN 2).
+    ## Chain 2: 
+    ## Chain 2: Gradient evaluation took 0 seconds
+    ## Chain 2: 1000 transitions using 10 leapfrog steps per transition would take 0 seconds.
+    ## Chain 2: Adjust your expectations accordingly!
+    ## Chain 2: 
+    ## Chain 2: 
+    ## Chain 2: Iteration:    1 / 2000 [  0%]  (Warmup)
+    ## Chain 2: Iteration:  200 / 2000 [ 10%]  (Warmup)
+    ## Chain 2: Iteration:  400 / 2000 [ 20%]  (Warmup)
+    ## Chain 2: Iteration:  600 / 2000 [ 30%]  (Warmup)
+    ## Chain 2: Iteration:  800 / 2000 [ 40%]  (Warmup)
+    ## Chain 2: Iteration: 1000 / 2000 [ 50%]  (Warmup)
+    ## Chain 2: Iteration: 1001 / 2000 [ 50%]  (Sampling)
+    ## Chain 2: Iteration: 1200 / 2000 [ 60%]  (Sampling)
+    ## Chain 2: Iteration: 1400 / 2000 [ 70%]  (Sampling)
+    ## Chain 2: Iteration: 1600 / 2000 [ 80%]  (Sampling)
+    ## Chain 2: Iteration: 1800 / 2000 [ 90%]  (Sampling)
+    ## Chain 2: Iteration: 2000 / 2000 [100%]  (Sampling)
+    ## Chain 2: 
+    ## Chain 2:  Elapsed Time: 0.023 seconds (Warm-up)
+    ## Chain 2:                0.022 seconds (Sampling)
+    ## Chain 2:                0.045 seconds (Total)
+    ## Chain 2: 
+    ## 
+    ## SAMPLING FOR MODEL '7c2788ab0560927e39f630a862813898' NOW (CHAIN 3).
+    ## Chain 3: 
+    ## Chain 3: Gradient evaluation took 0 seconds
+    ## Chain 3: 1000 transitions using 10 leapfrog steps per transition would take 0 seconds.
+    ## Chain 3: Adjust your expectations accordingly!
+    ## Chain 3: 
+    ## Chain 3: 
+    ## Chain 3: Iteration:    1 / 2000 [  0%]  (Warmup)
+    ## Chain 3: Iteration:  200 / 2000 [ 10%]  (Warmup)
+    ## Chain 3: Iteration:  400 / 2000 [ 20%]  (Warmup)
+    ## Chain 3: Iteration:  600 / 2000 [ 30%]  (Warmup)
+    ## Chain 3: Iteration:  800 / 2000 [ 40%]  (Warmup)
+    ## Chain 3: Iteration: 1000 / 2000 [ 50%]  (Warmup)
+    ## Chain 3: Iteration: 1001 / 2000 [ 50%]  (Sampling)
+    ## Chain 3: Iteration: 1200 / 2000 [ 60%]  (Sampling)
+    ## Chain 3: Iteration: 1400 / 2000 [ 70%]  (Sampling)
+    ## Chain 3: Iteration: 1600 / 2000 [ 80%]  (Sampling)
+    ## Chain 3: Iteration: 1800 / 2000 [ 90%]  (Sampling)
+    ## Chain 3: Iteration: 2000 / 2000 [100%]  (Sampling)
+    ## Chain 3: 
+    ## Chain 3:  Elapsed Time: 0.028 seconds (Warm-up)
+    ## Chain 3:                0.016 seconds (Sampling)
+    ## Chain 3:                0.044 seconds (Total)
+    ## Chain 3: 
+    ## 
+    ## SAMPLING FOR MODEL '7c2788ab0560927e39f630a862813898' NOW (CHAIN 4).
+    ## Chain 4: 
+    ## Chain 4: Gradient evaluation took 0 seconds
+    ## Chain 4: 1000 transitions using 10 leapfrog steps per transition would take 0 seconds.
+    ## Chain 4: Adjust your expectations accordingly!
+    ## Chain 4: 
+    ## Chain 4: 
+    ## Chain 4: Iteration:    1 / 2000 [  0%]  (Warmup)
+    ## Chain 4: Iteration:  200 / 2000 [ 10%]  (Warmup)
+    ## Chain 4: Iteration:  400 / 2000 [ 20%]  (Warmup)
+    ## Chain 4: Iteration:  600 / 2000 [ 30%]  (Warmup)
+    ## Chain 4: Iteration:  800 / 2000 [ 40%]  (Warmup)
+    ## Chain 4: Iteration: 1000 / 2000 [ 50%]  (Warmup)
+    ## Chain 4: Iteration: 1001 / 2000 [ 50%]  (Sampling)
+    ## Chain 4: Iteration: 1200 / 2000 [ 60%]  (Sampling)
+    ## Chain 4: Iteration: 1400 / 2000 [ 70%]  (Sampling)
+    ## Chain 4: Iteration: 1600 / 2000 [ 80%]  (Sampling)
+    ## Chain 4: Iteration: 1800 / 2000 [ 90%]  (Sampling)
+    ## Chain 4: Iteration: 2000 / 2000 [100%]  (Sampling)
+    ## Chain 4: 
+    ## Chain 4:  Elapsed Time: 0.021 seconds (Warm-up)
+    ## Chain 4:                0.025 seconds (Sampling)
+    ## Chain 4:                0.046 seconds (Total)
+    ## Chain 4:
+
+``` r
+#pp_check(SkepticalModel_priorCheck, nsamples = 100)
+
+SkepticalModel <- brm(Correct|trials(Questions) ~ 1,
+                      data = subset(d, Teacher=="RF"),
+                      prior = prior("normal(0.5,0.01)", class = "Intercept"),
+                      family = binomial,
+                      sample_prior = T)
+```
+
+    ## Compiling the C++ model
+    ## Start sampling
+
+    ## 
+    ## SAMPLING FOR MODEL '46ad38374ef5abb9a51984d68e04c062' NOW (CHAIN 1).
+    ## Chain 1: 
+    ## Chain 1: Gradient evaluation took 0.001 seconds
+    ## Chain 1: 1000 transitions using 10 leapfrog steps per transition would take 10 seconds.
+    ## Chain 1: Adjust your expectations accordingly!
+    ## Chain 1: 
+    ## Chain 1: 
+    ## Chain 1: Iteration:    1 / 2000 [  0%]  (Warmup)
+    ## Chain 1: Iteration:  200 / 2000 [ 10%]  (Warmup)
+    ## Chain 1: Iteration:  400 / 2000 [ 20%]  (Warmup)
+    ## Chain 1: Iteration:  600 / 2000 [ 30%]  (Warmup)
+    ## Chain 1: Iteration:  800 / 2000 [ 40%]  (Warmup)
+    ## Chain 1: Iteration: 1000 / 2000 [ 50%]  (Warmup)
+    ## Chain 1: Iteration: 1001 / 2000 [ 50%]  (Sampling)
+    ## Chain 1: Iteration: 1200 / 2000 [ 60%]  (Sampling)
+    ## Chain 1: Iteration: 1400 / 2000 [ 70%]  (Sampling)
+    ## Chain 1: Iteration: 1600 / 2000 [ 80%]  (Sampling)
+    ## Chain 1: Iteration: 1800 / 2000 [ 90%]  (Sampling)
+    ## Chain 1: Iteration: 2000 / 2000 [100%]  (Sampling)
+    ## Chain 1: 
+    ## Chain 1:  Elapsed Time: 0.041 seconds (Warm-up)
+    ## Chain 1:                0.033 seconds (Sampling)
+    ## Chain 1:                0.074 seconds (Total)
+    ## Chain 1: 
+    ## 
+    ## SAMPLING FOR MODEL '46ad38374ef5abb9a51984d68e04c062' NOW (CHAIN 2).
+    ## Chain 2: 
+    ## Chain 2: Gradient evaluation took 0 seconds
+    ## Chain 2: 1000 transitions using 10 leapfrog steps per transition would take 0 seconds.
+    ## Chain 2: Adjust your expectations accordingly!
+    ## Chain 2: 
+    ## Chain 2: 
+    ## Chain 2: Iteration:    1 / 2000 [  0%]  (Warmup)
+    ## Chain 2: Iteration:  200 / 2000 [ 10%]  (Warmup)
+    ## Chain 2: Iteration:  400 / 2000 [ 20%]  (Warmup)
+    ## Chain 2: Iteration:  600 / 2000 [ 30%]  (Warmup)
+    ## Chain 2: Iteration:  800 / 2000 [ 40%]  (Warmup)
+    ## Chain 2: Iteration: 1000 / 2000 [ 50%]  (Warmup)
+    ## Chain 2: Iteration: 1001 / 2000 [ 50%]  (Sampling)
+    ## Chain 2: Iteration: 1200 / 2000 [ 60%]  (Sampling)
+    ## Chain 2: Iteration: 1400 / 2000 [ 70%]  (Sampling)
+    ## Chain 2: Iteration: 1600 / 2000 [ 80%]  (Sampling)
+    ## Chain 2: Iteration: 1800 / 2000 [ 90%]  (Sampling)
+    ## Chain 2: Iteration: 2000 / 2000 [100%]  (Sampling)
+    ## Chain 2: 
+    ## Chain 2:  Elapsed Time: 0.032 seconds (Warm-up)
+    ## Chain 2:                0.046 seconds (Sampling)
+    ## Chain 2:                0.078 seconds (Total)
+    ## Chain 2: 
+    ## 
+    ## SAMPLING FOR MODEL '46ad38374ef5abb9a51984d68e04c062' NOW (CHAIN 3).
+    ## Chain 3: 
+    ## Chain 3: Gradient evaluation took 0 seconds
+    ## Chain 3: 1000 transitions using 10 leapfrog steps per transition would take 0 seconds.
+    ## Chain 3: Adjust your expectations accordingly!
+    ## Chain 3: 
+    ## Chain 3: 
+    ## Chain 3: Iteration:    1 / 2000 [  0%]  (Warmup)
+    ## Chain 3: Iteration:  200 / 2000 [ 10%]  (Warmup)
+    ## Chain 3: Iteration:  400 / 2000 [ 20%]  (Warmup)
+    ## Chain 3: Iteration:  600 / 2000 [ 30%]  (Warmup)
+    ## Chain 3: Iteration:  800 / 2000 [ 40%]  (Warmup)
+    ## Chain 3: Iteration: 1000 / 2000 [ 50%]  (Warmup)
+    ## Chain 3: Iteration: 1001 / 2000 [ 50%]  (Sampling)
+    ## Chain 3: Iteration: 1200 / 2000 [ 60%]  (Sampling)
+    ## Chain 3: Iteration: 1400 / 2000 [ 70%]  (Sampling)
+    ## Chain 3: Iteration: 1600 / 2000 [ 80%]  (Sampling)
+    ## Chain 3: Iteration: 1800 / 2000 [ 90%]  (Sampling)
+    ## Chain 3: Iteration: 2000 / 2000 [100%]  (Sampling)
+    ## Chain 3: 
+    ## Chain 3:  Elapsed Time: 0.046 seconds (Warm-up)
+    ## Chain 3:                0.037 seconds (Sampling)
+    ## Chain 3:                0.083 seconds (Total)
+    ## Chain 3: 
+    ## 
+    ## SAMPLING FOR MODEL '46ad38374ef5abb9a51984d68e04c062' NOW (CHAIN 4).
+    ## Chain 4: 
+    ## Chain 4: Gradient evaluation took 0 seconds
+    ## Chain 4: 1000 transitions using 10 leapfrog steps per transition would take 0 seconds.
+    ## Chain 4: Adjust your expectations accordingly!
+    ## Chain 4: 
+    ## Chain 4: 
+    ## Chain 4: Iteration:    1 / 2000 [  0%]  (Warmup)
+    ## Chain 4: Iteration:  200 / 2000 [ 10%]  (Warmup)
+    ## Chain 4: Iteration:  400 / 2000 [ 20%]  (Warmup)
+    ## Chain 4: Iteration:  600 / 2000 [ 30%]  (Warmup)
+    ## Chain 4: Iteration:  800 / 2000 [ 40%]  (Warmup)
+    ## Chain 4: Iteration: 1000 / 2000 [ 50%]  (Warmup)
+    ## Chain 4: Iteration: 1001 / 2000 [ 50%]  (Sampling)
+    ## Chain 4: Iteration: 1200 / 2000 [ 60%]  (Sampling)
+    ## Chain 4: Iteration: 1400 / 2000 [ 70%]  (Sampling)
+    ## Chain 4: Iteration: 1600 / 2000 [ 80%]  (Sampling)
+    ## Chain 4: Iteration: 1800 / 2000 [ 90%]  (Sampling)
+    ## Chain 4: Iteration: 2000 / 2000 [100%]  (Sampling)
+    ## Chain 4: 
+    ## Chain 4:  Elapsed Time: 0.052 seconds (Warm-up)
+    ## Chain 4:                0.035 seconds (Sampling)
+    ## Chain 4:                0.087 seconds (Total)
+    ## Chain 4:
+
+``` r
+#pp_check(SkepticalModel, nsamples = 100)
+plot(SkepticalModel)
+```
+
+![](Assignment2_files/figure-markdown_github/unnamed-chunk-8-3.png)
 
 If you dare, try to tweak the data and model to test two hypotheses: - Is Kristian different from Josh? - Is Josh different from chance?
 
@@ -463,35 +1349,9 @@ Guidance Tips
 3.  Are the parameter estimates changing? (way 1)
 4.  How does the new data look in last year's predictive posterior? (way 2)
 
-Making a function to return prior, likelihood and posterior for first data
+Calculating prior/posterior with Gaussian prior - and making prediction about new data
 
 ``` r
-# Making a function that can return our output
- calc_teacher <- function(teacher, correct, questions, prior, prob_grid){
-   
-   # Compute likelihood 
-   likelihood <- dbinom( correct, size = questions, prob = prob_grid )
-   
-   # Compute unstandardized posterior from likelihood and the prior
-   uns_posterior <- likelihood * prior
-   
-   # Compute standardized posterior. Now, it takes the bin size into account.
-   posterior <- uns_posterior / sum(uns_posterior)
-   
-   # Compute MAP (Maximum a posterior)
-   map <- match(max(posterior),posterior) / length(posterior)
-   
-   # posterior probability where p > 0.5
-   chance <- sum(posterior[ prob_grid > 0.5 ])
-   
-   # Teacher as factor
-   teacher <- as.factor(teacher)
-  
-   # specify output
-   return(list(teacher, map, chance, prior, likelihood, posterior))
-   
- }
-
 #Loop through all teachers
 
 # Making empty dataframe
@@ -523,8 +1383,54 @@ for(i in 1:nrow(data)) {
       else {
         teacher_info <- rbind(teacher_info, info)}
     
-    }
+}
+
+#Prob grid
+prob_grid <- seq(from = 0, to = 1, length.out = 10000)
+
+#function to make posterior prediction
+post_pred <- function(correct, questions, name, p_grid){
+  #Posterior
+  pos <- teacher_info$posterior[teacher_info$teacher == name]
+  
+  #Sample
+  sam <- sample(size = 10000, x = p_grid, prob = pos, replace = T)
+  
+  #Posterior prediction
+  post_pred <- rbinom( 1e5, size = questions, prob = sam)
+  
+  #plot prediction
+  post_pred <- as.data.frame(post_pred)
+  print(ggplot(data = post_pred , aes(post_pred - correct))+ 
+    geom_histogram(binwidth = correct*0.03)+
+    ggtitle(name) + xlab('Prediction Error'))
+  
+  # Predict new data +/- 3%
+  return((sum(post_pred >= correct-(questions*0.03) & post_pred <= correct+(questions*0.03)))/100000*100)
+  
+}
+
+# Loop through all teachers
+for (i in 1:nrow(new_data)){
+  print(post_pred(new_data$correct[i], new_data$questions[i], new_data$teacher[i], prob_grid))
+}
 ```
+
+![](Assignment2_files/figure-markdown_github/unnamed-chunk-10-1.png)
+
+    ## [1] 9.687
+
+![](Assignment2_files/figure-markdown_github/unnamed-chunk-10-2.png)
+
+    ## [1] 10.473
+
+![](Assignment2_files/figure-markdown_github/unnamed-chunk-10-3.png)
+
+    ## [1] 28.008
+
+![](Assignment2_files/figure-markdown_github/unnamed-chunk-10-4.png)
+
+    ## [1] 23.784
 
 Last years posterior is this years prior
 
@@ -571,10 +1477,10 @@ plot_teacher <- function(prob_grid, posterior, prior, likelihood, teacher){
   d <- data.frame(grid = prob_grid, posterior = posterior, prior = prior, likelihood = likelihood)
   print(ggplot(d, aes(grid,posterior)) +
           geom_point() +geom_line()+theme_classic() +
-          geom_line(aes(grid, prior),color= 'red')+
-          geom_line(aes(grid, abs(posterior - prior)), color = 'green')+
+          geom_line(aes(grid, prior), color= 'red')+
+          geom_line(aes(grid, abs(posterior - prior)),color = 'green')+
           ggtitle(teacher) +
-          xlab("Knowledge of CogSci")+ ylab("posterior probability"))
+          xlab("Knowledge of CogSci")+ ylab("Density"))
 }
 
 for (i in 1:nrow(new_data)){
@@ -591,7 +1497,7 @@ for (i in 1:nrow(new_data)){
 }
 ```
 
-![](Assignment2_files/figure-markdown_github/unnamed-chunk-11-1.png)![](Assignment2_files/figure-markdown_github/unnamed-chunk-11-2.png)![](Assignment2_files/figure-markdown_github/unnamed-chunk-11-3.png)![](Assignment2_files/figure-markdown_github/unnamed-chunk-11-4.png)
+![](Assignment2_files/figure-markdown_github/unnamed-chunk-12-1.png)![](Assignment2_files/figure-markdown_github/unnamed-chunk-12-2.png)![](Assignment2_files/figure-markdown_github/unnamed-chunk-12-3.png)![](Assignment2_files/figure-markdown_github/unnamed-chunk-12-4.png)
 
 Asses prediction in other ways
 
@@ -599,8 +1505,8 @@ Asses prediction in other ways
 # Difference in MAP
 MAP_diff <-new_teacher_info %>% group_by(teacher) %>% 
   summarise(
-    MAP_posterior = which.max(posterior),
-    MAP_prior = which.max(prior),
+    MAP_posterior = match(max(posterior), posterior) / length(posterior),
+    MAP_prior = match(max(prior), prior) / length(prior),
     MAP_diff = abs(MAP_posterior - MAP_prior)
   )
 
@@ -630,13 +1536,13 @@ MAP\_diff
 JS
 </td>
 <td style="text-align:right;">
-8321
+0.8321
 </td>
 <td style="text-align:right;">
-8079
+0.8079
 </td>
 <td style="text-align:right;">
-242
+0.0242
 </td>
 </tr>
 <tr>
@@ -644,13 +1550,13 @@ JS
 KT
 </td>
 <td style="text-align:right;">
-7364
+0.7364
 </td>
 <td style="text-align:right;">
-8899
+0.8899
 </td>
 <td style="text-align:right;">
-1535
+0.1535
 </td>
 </tr>
 <tr>
@@ -658,13 +1564,13 @@ KT
 MW
 </td>
 <td style="text-align:right;">
-5166
+0.5166
 </td>
 <td style="text-align:right;">
-5136
+0.5136
 </td>
 <td style="text-align:right;">
-30
+0.0030
 </td>
 </tr>
 <tr>
@@ -672,13 +1578,13 @@ MW
 RF
 </td>
 <td style="text-align:right;">
-7611
+0.7611
 </td>
 <td style="text-align:right;">
-6464
+0.6464
 </td>
 <td style="text-align:right;">
-1147
+0.1147
 </td>
 </tr>
 </tbody>

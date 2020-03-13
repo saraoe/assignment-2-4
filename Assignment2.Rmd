@@ -354,7 +354,7 @@ FlatModel_priorCheck <- brm(Correct|trials(Questions) ~ 1,
                  sample_prior = "only") # here we tell the model to ignore the data
 
 # Plotting the predictions of the model (prior only) against the actual data
-pp_check(FlatModel_priorCheck, nsamples = 100)
+#pp_check(FlatModel_priorCheck, nsamples = 100)
 
 # Model sampling by combining prior and likelihood
 FlatModel <- brm(Correct|trials(Questions) ~ 1,
@@ -363,7 +363,7 @@ FlatModel <- brm(Correct|trials(Questions) ~ 1,
                  family = binomial,
                  sample_prior = T)
 # Plotting the predictions of the model (prior + likelihood) against the actual data
-pp_check(FlatModel, nsamples = 100)
+#pp_check(FlatModel, nsamples = 100)
 
 # plotting the posteriors and the sampling process
 plot(FlatModel)
@@ -375,7 +375,7 @@ PositiveModel_priorCheck <- brm(Correct|trials(Questions) ~ 1,
                                    class = "Intercept"),
                      family=binomial,
                      sample_prior = "only")
-pp_check(PositiveModel_priorCheck, nsamples = 100)
+#pp_check(PositiveModel_priorCheck, nsamples = 100)
 
 PositiveModel <- brm(Correct|trials(Questions) ~ 1,
                      data = subset(d, Teacher=="RF"),
@@ -383,7 +383,7 @@ PositiveModel <- brm(Correct|trials(Questions) ~ 1,
                                    class = "Intercept"),
                      family=binomial,
                      sample_prior = T)
-pp_check(PositiveModel, nsamples = 100)
+#pp_check(PositiveModel, nsamples = 100)
 plot(PositiveModel)
 
 SkepticalModel_priorCheck <- brm(Correct|trials(Questions) ~ 1,
@@ -391,14 +391,14 @@ SkepticalModel_priorCheck <- brm(Correct|trials(Questions) ~ 1,
                       prior=prior("normal(0.5,0.01)", class = "Intercept"),
                       family=binomial,
                       sample_prior = "only")
-pp_check(SkepticalModel_priorCheck, nsamples = 100)
+#pp_check(SkepticalModel_priorCheck, nsamples = 100)
 
 SkepticalModel <- brm(Correct|trials(Questions) ~ 1,
                       data = subset(d, Teacher=="RF"),
                       prior = prior("normal(0.5,0.01)", class = "Intercept"),
                       family = binomial,
                       sample_prior = T)
-pp_check(SkepticalModel, nsamples = 100)
+#pp_check(SkepticalModel, nsamples = 100)
 plot(SkepticalModel)
 ```
 
@@ -479,44 +479,7 @@ for(i in 1:nrow(data)) {
 #Prob grid
 prob_grid <- seq(from = 0, to = 1, length.out = 10000)
 
-#Posterior for each teacher
-JS_pos <- teacher_info$posterior[teacher_info$teacher == 'JS']
-KT_pos <- teacher_info$posterior[teacher_info$teacher == 'KT']
-MW_pos <- teacher_info$posterior[teacher_info$teacher == 'MW']
-RF_pos <- teacher_info$posterior[teacher_info$teacher == 'RF']
-
-#Sample from all
-sam_JS <- sample(size = 10000, x = prob_grid, prob = JS_pos, replace = T)
-sam_KT <- sample(size = 10000, x = prob_grid, prob = KT_pos, replace = T)
-sam_MW <- sample(size = 10000, x = prob_grid, prob = MW_pos, replace = T)
-sam_RF <- sample(size = 10000, x = prob_grid, prob = RF_pos, replace = T)
-
-# Here, we make posterior predictions, from the posterior samples 
-post_pred_samples_JS <- rbinom( 1e5, size = 172, prob = sam_JS)
-post_pred_samples_KT <- rbinom( 1e5, size = 12, prob = sam_KT)
-post_pred_samples_MW <- rbinom( 1e5, size =65, prob = sam_MW)
-post_pred_samples_RF <- rbinom( 1e5, size = 10, prob = sam_RF)
-
-# How well does the old posterior with the prior of 0.8 mean and 0.2 SD predict the new data????
-(sum(post_pred_samples_JS >= 148-(172*0.03) & post_pred_samples_JS <= 148+(172*0.03)))/100000*100
-(sum(post_pred_samples_KT >= 8-(12*0.03) & post_pred_samples_KT <= 8+(12*0.03)))/100000*100
-(sum(post_pred_samples_MW >= 34-(65*0.03) & post_pred_samples_MW <= 34+(65*0.03)))/100000*100
-(sum(post_pred_samples_RF >= 9-(10*0.03) & post_pred_samples_JS <= 9+(10*0.03)))/100000*100
-
-#Plot prediction errors
-hist(post_pred_samples_JS-148)
-hist(post_pred_samples_KT-8)
-hist(post_pred_samples_MW-34)
-hist(post_pred_samples_RF-9)
-
-post_pred_samples_JS <- as.data.frame(post_pred_samples_JS)
-
-ggplot(data = post_pred_samples_JS, aes(post_pred_samples_JS-148))+ 
-  geom_histogram(binwidth = 148*0.03)+
-  ggtitle('JS') + xlab('Prediction Error')
-
-
-#Loop
+#function to make posterior prediction
 post_pred <- function(correct, questions, name, p_grid){
   #Posterior
   pos <- teacher_info$posterior[teacher_info$teacher == name]
@@ -527,21 +490,22 @@ post_pred <- function(correct, questions, name, p_grid){
   #Posterior prediction
   post_pred <- rbinom( 1e5, size = questions, prob = sam)
   
-  # Prediction
-  return((sum(post_pred >= correct-(questions*0.03) & post_pred <= correct+(questions*0.03)))/100000*100)
-  
   #plot prediction
   post_pred <- as.data.frame(post_pred)
   print(ggplot(data = post_pred , aes(post_pred - correct))+ 
     geom_histogram(binwidth = correct*0.03)+
     ggtitle(name) + xlab('Prediction Error'))
+  
+  # Predict new data +/- 3%
+  return((sum(post_pred >= correct-(questions*0.03) & post_pred <= correct+(questions*0.03)))/100000*100)
+  
 }
 
+# Loop through all teachers
 for (i in 1:nrow(new_data)){
   print(post_pred(new_data$correct[i], new_data$questions[i], new_data$teacher[i], prob_grid))
 }
 
-post_pred(new_data$correct[1], new_data$questions[1], new_data$teacher[1], prob_grid)
 
 ```
 
