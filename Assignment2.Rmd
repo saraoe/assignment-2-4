@@ -10,7 +10,7 @@ output:
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 library(pacman)
-p_load(rethinking, tidyverse, data.table,formattable, dplyr)
+p_load(rethinking, tidyverse, data.table,formattable, dplyr, base)
 ```
 
 ## In this assignment we learn how to assess rates from a binomial distribution, using the case of assessing your teachers' knowledge of CogSci
@@ -80,7 +80,7 @@ sum( posterior[ prob_grid > 0.5 ] )
 
 #Draw the plot
 d <- data.frame(grid = prob_grid, posterior = posterior, prior = prior, likelihood = likelihood)
-ggplot(d, aes(grid,posterior)) +  geom_point() +geom_line()+theme_classic()+  geom_line(aes(grid, prior/dens),color= 'red')+  xlab('Knowledge of CogSci')+ ylab('posterior probability')
+ggplot(d, aes(grid,posterior)) +  geom_point() +geom_line()+theme_classic()+  geom_line(aes(grid, prior/dens),color= 'red')+  xlab('Knowledge of CogSci')+ ylab('Density')
 
 # quadratic approximation
 rf_qa <- rethinking::map(alist(
@@ -97,6 +97,91 @@ precis(rf_qa)
 
 2. Estimate all the teachers' knowledge of CogSci. Who's best? Use grid approximation. Comment on the posteriors of Riccardo and Mikkel.
 2a. Produce plots of the prior, and posterior for each teacher.
+
+Making a function to return prior, likelihood and posterior
+```{r}
+# Making a function that can return our output
+ calc_teacher <- function(teacher, correct, questions, prior, prob_grid){
+   
+   # Compute likelihood 
+   likelihood <- dbinom( correct, size = questions, prob = prob_grid )
+   
+   # Compute unstandardized posterior from likelihood and the prior
+   uns_posterior <- likelihood * prior
+   
+   # Compute standardized posterior. 
+   posterior <- uns_posterior / sum(uns_posterior)
+   
+   # Compute MAP (Maximum a posterior)
+   map <- match(max(posterior),posterior) / length(posterior)
+   
+   # posterior probability where p > 0.5
+   chance <- sum(posterior[ prob_grid > 0.5 ])
+   
+   # Teacher as factor
+   teacher <- as.factor(teacher)
+  
+   # specify output
+   return(list(teacher, map, chance, prior, likelihood, posterior))
+   
+ }
+
+#Loop through all teachers
+
+# Making empty dataframe
+teacher_info <- data.frame(teacher = factor(), MAP = numeric(), chance = numeric(), prior = numeric(), likelihood = numeric(), posterior = numeric())
+# Run loop to extract MAP and 'chance above chance' for each teacher
+for(i in 1:nrow(data)) {
+    
+    correct <- data[i,1]
+    questions <- data[i,2]
+    teacher <- data[i,3]
+    # Define grid and prior
+    prob_grid <- seq(from = 0, to = 1, length.out = 10000)
+    prior <- rep(1, 10000)
+    
+    
+    # Use my sexy little function
+    info <- calc_teacher(teacher, correct, questions, prior, prob_grid) %>% as.data.frame()
+    
+    names(info)[1] <- "teacher"
+    names(info)[2] <- "MAP"
+    names(info)[3] <- "chance"
+    names(info)[4] <- "prior"
+    names(info)[5] <- "likelihood"
+    names(info)[6] <- "posterior"
+    
+    # Combine with premade empty dataframe
+    if (nrow(teacher_info) == 0) {
+      teacher_info <- info}
+      else {
+        teacher_info <- rbind(teacher_info, info)}
+    
+}
+
+#Prob grid
+prob_grid <- seq(from = 0, to = 1, length.out = 10000)
+
+#Posterior for each teacher
+JS_pos <- teacher_info$posterior[teacher_info$teacher == 'JS']
+KT_pos <- teacher_info$posterior[teacher_info$teacher == 'KT']
+MW_pos <- teacher_info$posterior[teacher_info$teacher == 'MW']
+RF_pos <- teacher_info$posterior[teacher_info$teacher == 'RF']
+
+#Sample from all
+sam_JS <- sample(size = 10000, x = prob_grid, prob = JS_pos, replace = T)
+sam_KT <- sample(size = 10000, x = prob_grid, prob = KT_pos, replace = T)
+sam_MW <- sample(size = 10000, x = prob_grid, prob = MW_pos, replace = T)
+sam_RF <- sample(size = 10000, x = prob_grid, prob = RF_pos, replace = T)
+
+#Difference between teachers
+# JS and KT
+sum(sam_JS > sam_KT)/10000*100
+# RF and MW
+sum(sam_RF > sam_MW)/10000*100
+```
+
+Function for plots
 ```{r}
 g_approx2 <- function(correct, questions, teacher, dens){
   #Define grid
@@ -123,7 +208,7 @@ g_approx2 <- function(correct, questions, teacher, dens){
           geom_point() +geom_line()+theme_classic() +
           geom_line(aes(grid, prior/dens),color= 'red')+
           ggtitle(teacher) +
-          xlab("Knowledge of CogSci")+ ylab("posterior probability")
+          xlab("Knowledge of CogSci")+ ylab("Density")
   
 }
 
@@ -135,7 +220,7 @@ g_approx2(66,132, "Mikkel Wallentin", 50)
 
 #Doing it for all data
 for (i in 1:nrow(data)){
-  print(g_approx2(data$correct[i], data$questions[i], data$teacher[i], dens = 100))
+  print(g_approx2(data$correct[i], data$questions[i], data$teacher[i], dens = 10000))
   
 }
 
@@ -174,7 +259,7 @@ g_approx3 <- function(data, dens){
           geom_point() +geom_line()+theme_classic() +
           geom_line(aes(grid, prior/dens),color= 'red')+
           ggtitle(teacher) +
-          xlab("Knowledge of CogSci")+ ylab("posterior probability"))
+          xlab("Knowledge of CogSci")+ ylab("Density"))
   
   #Performance
   teacher <- as.character(teacher)
@@ -237,7 +322,7 @@ g_approx5 <- function(data, dens){
           geom_point() +geom_line()+theme_classic() +
           geom_line(aes(grid, prior/dens),color= 'red')+
           ggtitle(teacher) +
-          xlab("Knowledge of CogSci")+ ylab("posterior probability"))
+          xlab("Knowledge of CogSci")+ ylab("Denisty"))
   
   #Performance
   teacher <- as.character(teacher)
@@ -356,34 +441,8 @@ Guidance Tips
 3. Are the parameter estimates changing? (way 1)
 4. How does the new data look in last year's predictive posterior? (way 2)
 
-Making a function to return prior, likelihood and posterior for first data
+Calculating prior/posterior with Gaussian prior - and making prediction about new data
 ```{r}
-# Making a function that can return our output
- calc_teacher <- function(teacher, correct, questions, prior, prob_grid){
-   
-   # Compute likelihood 
-   likelihood <- dbinom( correct, size = questions, prob = prob_grid )
-   
-   # Compute unstandardized posterior from likelihood and the prior
-   uns_posterior <- likelihood * prior
-   
-   # Compute standardized posterior. Now, it takes the bin size into account.
-   posterior <- uns_posterior / sum(uns_posterior)
-   
-   # Compute MAP (Maximum a posterior)
-   map <- match(max(posterior),posterior) / length(posterior)
-   
-   # posterior probability where p > 0.5
-   chance <- sum(posterior[ prob_grid > 0.5 ])
-   
-   # Teacher as factor
-   teacher <- as.factor(teacher)
-  
-   # specify output
-   return(list(teacher, map, chance, prior, likelihood, posterior))
-   
- }
-
 #Loop through all teachers
 
 # Making empty dataframe
@@ -415,8 +474,77 @@ for(i in 1:nrow(data)) {
       else {
         teacher_info <- rbind(teacher_info, info)}
     
-    }
+}
+
+#Prob grid
+prob_grid <- seq(from = 0, to = 1, length.out = 10000)
+
+#Posterior for each teacher
+JS_pos <- teacher_info$posterior[teacher_info$teacher == 'JS']
+KT_pos <- teacher_info$posterior[teacher_info$teacher == 'KT']
+MW_pos <- teacher_info$posterior[teacher_info$teacher == 'MW']
+RF_pos <- teacher_info$posterior[teacher_info$teacher == 'RF']
+
+#Sample from all
+sam_JS <- sample(size = 10000, x = prob_grid, prob = JS_pos, replace = T)
+sam_KT <- sample(size = 10000, x = prob_grid, prob = KT_pos, replace = T)
+sam_MW <- sample(size = 10000, x = prob_grid, prob = MW_pos, replace = T)
+sam_RF <- sample(size = 10000, x = prob_grid, prob = RF_pos, replace = T)
+
+# Here, we make posterior predictions, from the posterior samples 
+post_pred_samples_JS <- rbinom( 1e5, size = 172, prob = sam_JS)
+post_pred_samples_KT <- rbinom( 1e5, size = 12, prob = sam_KT)
+post_pred_samples_MW <- rbinom( 1e5, size =65, prob = sam_MW)
+post_pred_samples_RF <- rbinom( 1e5, size = 10, prob = sam_RF)
+
+# How well does the old posterior with the prior of 0.8 mean and 0.2 SD predict the new data????
+(sum(post_pred_samples_JS >= 148-(172*0.03) & post_pred_samples_JS <= 148+(172*0.03)))/100000*100
+(sum(post_pred_samples_KT >= 8-(12*0.03) & post_pred_samples_KT <= 8+(12*0.03)))/100000*100
+(sum(post_pred_samples_MW >= 34-(65*0.03) & post_pred_samples_MW <= 34+(65*0.03)))/100000*100
+(sum(post_pred_samples_RF >= 9-(10*0.03) & post_pred_samples_JS <= 9+(10*0.03)))/100000*100
+
+#Plot prediction errors
+hist(post_pred_samples_JS-148)
+hist(post_pred_samples_KT-8)
+hist(post_pred_samples_MW-34)
+hist(post_pred_samples_RF-9)
+
+post_pred_samples_JS <- as.data.frame(post_pred_samples_JS)
+
+ggplot(data = post_pred_samples_JS, aes(post_pred_samples_JS-148))+ 
+  geom_histogram(binwidth = 148*0.03)+
+  ggtitle('JS') + xlab('Prediction Error')
+
+
+#Loop
+post_pred <- function(correct, questions, name, p_grid){
+  #Posterior
+  pos <- teacher_info$posterior[teacher_info$teacher == name]
+  
+  #Sample
+  sam <- sample(size = 10000, x = p_grid, prob = pos, replace = T)
+  
+  #Posterior prediction
+  post_pred <- rbinom( 1e5, size = questions, prob = sam)
+  
+  # Prediction
+  return((sum(post_pred >= correct-(questions*0.03) & post_pred <= correct+(questions*0.03)))/100000*100)
+  
+  #plot prediction
+  post_pred <- as.data.frame(post_pred)
+  print(ggplot(data = post_pred , aes(post_pred - correct))+ 
+    geom_histogram(binwidth = correct*0.03)+
+    ggtitle(name) + xlab('Prediction Error'))
+}
+
+for (i in 1:nrow(new_data)){
+  print(post_pred(new_data$correct[i], new_data$questions[i], new_data$teacher[i], prob_grid))
+}
+
+post_pred(new_data$correct[1], new_data$questions[1], new_data$teacher[1], prob_grid)
+
 ```
+
 
 Last years posterior is this years prior
 ```{r}
@@ -461,10 +589,10 @@ plot_teacher <- function(prob_grid, posterior, prior, likelihood, teacher){
   d <- data.frame(grid = prob_grid, posterior = posterior, prior = prior, likelihood = likelihood)
   print(ggplot(d, aes(grid,posterior)) +
           geom_point() +geom_line()+theme_classic() +
-          geom_line(aes(grid, prior),color= 'red')+
-          geom_line(aes(grid, abs(posterior - prior)), color = 'green')+
+          geom_line(aes(grid, prior), color= 'red')+
+          geom_line(aes(grid, abs(posterior - prior)),color = 'green')+
           ggtitle(teacher) +
-          xlab("Knowledge of CogSci")+ ylab("posterior probability"))
+          xlab("Knowledge of CogSci")+ ylab("Density"))
 }
 
 for (i in 1:nrow(new_data)){
@@ -487,8 +615,8 @@ Asses prediction in other ways
 # Difference in MAP
 MAP_diff <-new_teacher_info %>% group_by(teacher) %>% 
   summarise(
-    MAP_posterior = which.max(posterior),
-    MAP_prior = which.max(prior),
+    MAP_posterior = match(max(posterior), posterior) / length(posterior),
+    MAP_prior = match(max(prior), prior) / length(prior),
     MAP_diff = abs(MAP_posterior - MAP_prior)
   )
 
