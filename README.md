@@ -1,2 +1,4 @@
-# assignment-2-4
-Second assignment on fourth semester
+# Grid approximation
+_Second assignment for computational modelling_
+
+Doing grid approximation for bayesian analysis.
